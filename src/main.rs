@@ -1,5 +1,5 @@
 use structopt::StructOpt;
-use std::{fs, str::FromStr};
+use std::fs;
 use log::warn;
 
 #[derive(StructOpt)]
@@ -32,11 +32,9 @@ fn main() {
 
     let common_name = cn_from_public_key(&public_key);
     
-    for certfile in scan_for_certs(&common_name) {
-        if certfile.common_name == common_name {
-            replace_cert(&certfile.public_key_path, &public_key);
-            replace_cert(&certfile.private_key_path, &private_key)
-        }
+    for certfile in search_for_certs(&common_name) {
+        replace_cert(&certfile.public_key_path, &public_key);
+        replace_cert(&certfile.private_key_path, &private_key);
     }
 }
 
@@ -44,7 +42,38 @@ fn valid_cn(common_name: &str) -> bool {true}
 
 fn cn_from_public_key(public_key: &str) -> &str {"domain.com"}
 
-fn scan_for_certs(common_name: &str) -> Vec<CertBundle> {Vec::new()}
+const SEARCH_LOCATIONS: [&str; 3] = [
+    "/etc/ssl/",
+    "/etc/nginx",
+    "/etc/httpd"
+];
+
+fn search_for_certs(common_name: &str) -> Vec<CertBundle> {
+    let mut certs: Vec<CertBundle> = Vec::new();
+    for path in SEARCH_LOCATIONS.iter() {
+        for cert in search_dir(path) {
+            
+        }
+    }
+
+    return certs
+}
+
+const SEARCH_EXTENSIONS: [&str; 0] = [
+
+];
+
+fn search_dir(path: &str) -> Vec<CertBundle> {
+    let mut certs: Vec<CertBundle> = Vec::new();
+    let mut public_keys: Vec<String> = Vec::new();
+    let mut private_keys: Vec<String> = Vec::new();
+
+    for entry in fs::read_dir(path).unwrap() {
+        
+    }
+
+    return certs;
+}
 
 fn replace_cert(path: &str, content: &str) {
     let backup_path = format!("{}.bkp", &path);
