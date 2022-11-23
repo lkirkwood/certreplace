@@ -1,10 +1,9 @@
-use log::{debug, error, warn};
+use log::{error, warn};
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Private};
 use openssl::x509::X509;
 use std::fmt::Display;
-use std::fs::DirEntry;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::{fs, io};
 use structopt::StructOpt;
 
@@ -23,11 +22,32 @@ struct Cli {
     private_key: Option<String>,
 }
 
-#[derive(Debug)]
-struct CertBundle {
+#[derive(Debug, Clone)]
+/// Models an X509 certificate.
+struct Cert {
     cert: X509,
-    privkey: Option<PKey<Private>>,
     common_name: String,
+    path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+/// Models an X509 certificate private key.
+struct PrivKey {
+    key: PKey<Private>,
+    path: PathBuf,
+}
+
+#[derive(Debug)]
+/// A X509 cert and its corresponding private key.
+struct CertBundle {
+    cert: Cert,
+    privkey: Option<PrivKey>,
+}
+
+#[derive(Debug)]
+enum PKIObject {
+    Cert(Cert),
+    PrivKey(PrivKey),
 }
 
 fn main() {
@@ -63,15 +83,14 @@ fn main() {
             None => None,
         };
 
-        for bundle in find_certs(
-            PathBuf::from(args.path).as_path(),
-            &common_name,
-            privkey.is_some(),
-        ) {
+        for bundle in find_certs(PathBuf::from(args.path), &common_name, privkey.is_some()) {
+            let privkey = match bundle.privkey {
+                None => "no".to_string(),
+                Some(pkey) => format!("yes, at {:?}", pkey.path),
+            };
             println!(
                 "Matching bundle: {:?}; Has privkey: {}",
-                bundle.common_name,
-                bundle.privkey.is_some()
+                bundle.cert.path, privkey
             );
         }
     } else {
@@ -126,44 +145,49 @@ fn get_user_consent(cn: &str, privkeys: bool) -> bool {
     return input.to_lowercase().starts_with("y");
 }
 
-pub enum PKIObject {
-    Public(X509),
-    Private(PKey<Private>),
-}
-
 /// Finds certificates in the path that match the cn, and returns them.
 /// Finds their matching privkeys if the parameter is true.
-fn find_certs(path: &Path, cn: &str, privkeys: bool) -> Vec<CertBundle> {
+fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> Vec<CertBundle> {
     let mut bundles = Vec::new();
 
-    let (certs, mut keys) = find_pkiobjs(path, privkeys);
-    for cert in certs {
-        if let Some(new_cn) = get_cn(&cert) {
-            if new_cn == cn {
-                let privkey = if privkeys {
-                    match_cert_to_key(&cert, &mut keys)
-                } else {
-                    None
-                };
-
-                if let Some(common_name) = get_cn(&cert) {
-                    bundles.push(CertBundle {
-                        cert,
-                        privkey,
-                        common_name,
-                    })
+    let mut certs = Vec::new();
+    let mut keys = Vec::new();
+    for path in find_pkiobjs(path, privkeys) {
+        match parse_pkiobjs(path) {
+            Err(err) => error!("{err}"),
+            Ok(pkiobjs) => {
+                for pkiobj in pkiobjs {
+                    match pkiobj {
+                        PKIObject::Cert(cert) => {
+                            if cert.common_name == cn {
+                                certs.push(cert)
+                            }
+                        }
+                        PKIObject::PrivKey(pkey) => keys.push(pkey),
+                    }
                 }
             }
+        }
+    }
+
+    for cert in certs {
+        if cert.common_name == cn {
+            let privkey = if privkeys {
+                find_privkey(&cert.cert, &keys)
+            } else {
+                None
+            };
+
+            bundles.push(CertBundle { cert, privkey })
         }
     }
 
     return bundles;
 }
 
-fn find_pkiobjs(path: &Path, privkeys: bool) -> (Vec<X509>, Vec<PKey<Private>>) {
-    let mut certs = Vec::new();
-    let mut keys = Vec::new();
-    match fs::read_dir(path) {
+fn find_pkiobjs(path: PathBuf, privkeys: bool) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    match fs::read_dir(&path) {
         Err(err) => error!("Failed while reading directory in {:?}: {:?}", path, err),
         Ok(entries) => {
             for entry in entries {
@@ -175,28 +199,16 @@ fn find_pkiobjs(path: &Path, privkeys: bool) -> (Vec<X509>, Vec<PKey<Private>>) 
                     if let Ok(ftype) = entry.file_type() {
                         if ftype.is_dir() {
                             // Recurse
-                            let (_certs, _keys) = find_pkiobjs(entry.path().as_path(), privkeys);
-                            certs.extend(_certs);
-                            keys.extend(_keys);
+                            paths.extend(find_pkiobjs(entry.path(), privkeys));
                         } else {
-                            if let Some((name, ext)) =
+                            if let Some((_, ext)) =
                                 entry.file_name().to_string_lossy().rsplit_once('.')
                             {
-                                let parse_res = match ext {
-                                    "pem" | "crt" | "cer" | "der" | "key" => parse_pkiobjs(entry),
-                                    _ => Ok(vec![]),
-                                };
-
-                                match parse_res {
-                                    Ok(pkiobjs) => {
-                                        for pkiobj in pkiobjs {
-                                            match pkiobj {
-                                                PKIObject::Public(cert) => certs.push(cert),
-                                                PKIObject::Private(pkey) => keys.push(pkey),
-                                            }
-                                        }
+                                match ext {
+                                    "pem" | "crt" | "cer" | "der" | "key" => {
+                                        paths.push(entry.path())
                                     }
-                                    Err(err) => error!("Failed parsing certs from file: {:?}", err),
+                                    _ => {}
                                 }
                             }
                         }
@@ -205,7 +217,7 @@ fn find_pkiobjs(path: &Path, privkeys: bool) -> (Vec<X509>, Vec<PKey<Private>>) 
             }
         }
     }
-    return (certs, keys);
+    return paths;
 }
 
 #[derive(Debug)]
@@ -220,43 +232,62 @@ impl Display for ParseError {
 }
 
 /// Parses X509 certs and privkeys from a PEM encoded file.
-fn parse_pkiobjs(entry: DirEntry) -> Result<Vec<PKIObject>, ParseError> {
+fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
     let mut pkiobjs = Vec::new();
-    match fs::read(entry.path()) {
+    match fs::read(&path) {
         Ok(content) => {
-            if let Some(pkey) = parse_privkey(&content) {
-                pkiobjs.push(PKIObject::Private(pkey));
+            if let Some(key) = parse_privkey(&content) {
+                pkiobjs.push(PKIObject::PrivKey(PrivKey { key, path }));
             } else if let Ok(cert) = X509::from_pem(&content) {
-                pkiobjs.push(PKIObject::Public(cert));
+                if let Some(common_name) = get_cn(&cert) {
+                    pkiobjs.push(PKIObject::Cert(Cert {
+                        cert,
+                        common_name,
+                        path,
+                    }));
+                }
             } else if let Ok(cert) = X509::from_der(&content) {
-                pkiobjs.push(PKIObject::Public(cert));
+                if let Some(common_name) = get_cn(&cert) {
+                    pkiobjs.push(PKIObject::Cert(Cert {
+                        cert,
+                        common_name,
+                        path,
+                    }));
+                }
             } else if let Ok(certs) = X509::stack_from_pem(&content) {
-                pkiobjs.extend(certs.into_iter().map(|c| PKIObject::Public(c)));
+                for cert in certs {
+                    if let Some(common_name) = get_cn(&cert) {
+                        pkiobjs.push(PKIObject::Cert(Cert {
+                            cert,
+                            common_name,
+                            path: path.clone(),
+                        }));
+                    }
+                }
             } else {
                 return Err(ParseError {
-                    msg: format!("Failed to parse data from file at: {:?}", entry.path()),
+                    msg: format!("Failed to parse data from file at: {:?}", path),
                 });
             }
         }
         Err(err) => {
             return Err(ParseError {
-                msg: format!("Failed to read contents of potential cert: {:?}", err),
+                msg: format!(
+                    "Failed to read contents of potential cert at {:?}: {:?}",
+                    path, err
+                ),
             })
         }
     };
     return Ok(pkiobjs);
 }
 
-fn parse_der(entry: DirEntry) -> Result<Vec<PKIObject>, ParseError> {
-    todo!("implement der parsing")
-}
-
 /// Returns the private key matching the public key in the certificate.
-fn match_cert_to_key(cert: &X509, keys: &mut Vec<PKey<Private>>) -> Option<PKey<Private>> {
+fn find_privkey(cert: &X509, keys: &Vec<PrivKey>) -> Option<PrivKey> {
     if let Ok(pubkey) = cert.public_key() {
         for (index, key) in keys.iter().enumerate() {
-            if key.public_eq(&pubkey) {
-                return Some(keys.remove(index));
+            if key.key.public_eq(&pubkey) {
+                return Some(keys.get(index).unwrap().clone());
             }
         }
     }
