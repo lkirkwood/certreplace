@@ -38,10 +38,10 @@ struct PrivKey {
 }
 
 #[derive(Debug)]
-/// A X509 cert and its corresponding private key.
-struct CertBundle {
-    cert: Cert,
-    privkey: Option<PrivKey>,
+/// Holds paths of all the objects to be replaced.
+struct ReplacePaths {
+    certs: Vec<PathBuf>,
+    keys: Vec<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -82,17 +82,10 @@ fn main() {
             }
             None => None,
         };
-
-        for bundle in find_certs(PathBuf::from(args.path), &common_name, privkey.is_some()) {
-            let privkey = match bundle.privkey {
-                None => "no".to_string(),
-                Some(pkey) => format!("yes, at {:?}", pkey.path),
-            };
-            println!(
-                "Matching bundle: {:?}; Has privkey: {}",
-                bundle.cert.path, privkey
-            );
-        }
+        println!(
+            "Matches: \n{:#?}",
+            find_certs(PathBuf::from(args.path), &common_name, privkey.is_some())
+        );
     } else {
         panic!(
             "User declined to replace objects for common name: {}",
@@ -147,9 +140,7 @@ fn get_user_consent(cn: &str, privkeys: bool) -> bool {
 
 /// Finds certificates in the path that match the cn, and returns them.
 /// Finds their matching privkeys if the parameter is true.
-fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> Vec<CertBundle> {
-    let mut bundles = Vec::new();
-
+fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> ReplacePaths {
     let mut certs = Vec::new();
     let mut keys = Vec::new();
     for path in find_pkiobjs(path, privkeys) {
@@ -170,19 +161,28 @@ fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> Vec<CertBundle> {
         }
     }
 
+    let mut matched_certs = Vec::new();
+    let mut matched_keys = Vec::new();
     for cert in certs {
         if cert.common_name == cn {
-            let privkey = if privkeys {
-                find_privkey(&cert.cert, &keys)
-            } else {
-                None
-            };
-
-            bundles.push(CertBundle { cert, privkey })
+            match find_privkeys(&cert.cert, keys) {
+                Ok((matched, unmatched)) => {
+                    matched_keys.extend(matched);
+                    keys = unmatched;
+                }
+                Err((err, unmatched)) => {
+                    error!("Error on cert at {:?}: {:?}", cert.path, err);
+                    keys = unmatched;
+                }
+            }
+            matched_certs.push(cert.path);
         }
     }
 
-    return bundles;
+    return ReplacePaths {
+        certs: matched_certs,
+        keys: matched_keys.into_iter().map(|k| k.path).collect(),
+    };
 }
 
 fn find_pkiobjs(path: PathBuf, privkeys: bool) -> Vec<PathBuf> {
@@ -282,16 +282,22 @@ fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
     return Ok(pkiobjs);
 }
 
-/// Returns the private key matching the public key in the certificate.
-fn find_privkey(cert: &X509, keys: &Vec<PrivKey>) -> Option<PrivKey> {
+/// Splits the keys into those that match the certificate (left) and those that dont (right).
+/// Upon error all keys are returned with the error.
+fn find_privkeys(
+    cert: &X509,
+    keys: Vec<PrivKey>,
+) -> Result<(Vec<PrivKey>, Vec<PrivKey>), (ParseError, Vec<PrivKey>)> {
     if let Ok(pubkey) = cert.public_key() {
-        for (index, key) in keys.iter().enumerate() {
-            if key.key.public_eq(&pubkey) {
-                return Some(keys.get(index).unwrap().clone());
-            }
-        }
+        return Ok(keys.into_iter().partition(|key| key.key.public_eq(&pubkey)));
+    } else {
+        return Err((
+            ParseError {
+                msg: format!("Failed to read public key from X509: {:?}", cert),
+            },
+            keys,
+        ));
     }
-    return None;
 }
 
 fn replace_cert(path: &str, content: &str) {
