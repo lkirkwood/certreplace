@@ -62,7 +62,7 @@ impl Verb {
 pub struct Cert {
     pub cert: X509,
     pub common_name: String,
-    pub path: PathBuf,
+    pub locator: BytesLocator,
 }
 
 #[derive(Debug, Clone)]
@@ -71,14 +71,24 @@ pub struct PrivKey {
     /// Private key.
     pub key: PKey<Private>,
     /// Path to file with key in.
+    pub locator: BytesLocator,
+}
+
+#[derive(Debug, Clone)]
+pub struct BytesLocator {
+    /// Path to the file containing the bytes.
     pub path: PathBuf,
+    /// Index of the start of the bytes in the file.
+    pub start: usize,
+    /// Index of the end of the bytes in the file.
+    pub end: usize,
 }
 
 #[derive(Debug)]
 /// Holds paths of all the objects to be replaced.
 pub struct ReplacePaths {
-    pub certs: Vec<PathBuf>,
-    pub keys: Vec<PathBuf>,
+    pub certs: Vec<BytesLocator>,
+    pub keys: Vec<BytesLocator>,
 }
 
 #[derive(Debug)]
