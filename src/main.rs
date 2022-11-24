@@ -336,7 +336,6 @@ fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
             })
         }
     };
-    println!("{:#?}", pkiobjs);
     return Ok(pkiobjs);
 }
 
