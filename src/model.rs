@@ -3,6 +3,21 @@ use openssl::x509::X509;
 use std::fmt::Display;
 use std::path::PathBuf;
 
+// Error
+
+#[derive(Debug)]
+pub struct ParseError {
+    pub msg: String,
+}
+impl std::error::Error for ParseError {}
+impl Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Failed to parse certificate: {}", self.msg)
+    }
+}
+
+// Model
+
 #[derive(Debug)]
 pub enum Verb {
     Find {
