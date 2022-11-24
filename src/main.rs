@@ -1,6 +1,6 @@
 mod model;
 
-use log::{error, warn};
+use log::error;
 use model::*;
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Private};
@@ -73,10 +73,15 @@ fn main() {
     };
 
     if get_user_consent(&verb) {
-        println!(
-            "Matches: \n{:#?}",
-            find_certs(PathBuf::from(args.path), verb.cn(), verb.privkeys())
-        );
+        let paths = find_certs(PathBuf::from(args.path), verb.cn(), verb.privkeys());
+        match verb {
+            Verb::Find { cn: _ } => print_paths(paths),
+            Verb::Replace {
+                cn: _,
+                cert,
+                privkey,
+            } => replace_paths(paths, cert, privkey),
+        }
     } else {
         panic!(
             "User declined to replace objects for common name: {}",
@@ -280,18 +285,35 @@ fn find_privkeys(
     }
 }
 
-fn replace_cert(path: &str, content: &str) {
-    let backup_path = format!("{}.bkp", &path);
-    let backup_result = fs::copy(path, &backup_path); // TODO add date
-    if backup_result.is_ok() {
-        let write_result = fs::write(&path, &content);
-        if write_result.is_err() {
-            warn!("Failed to write to certificate at {}", path);
-        }
-    } else {
-        warn!(
-            "Failed to backup certificate at {} to {}",
-            path, backup_path
-        );
+// fn replace_cert(path: &str, content: &str) {
+//     let backup_path = format!("{}.bkp", &path);
+//     let backup_result = fs::copy(path, &backup_path); // TODO add date
+//     if backup_result.is_ok() {
+//         let write_result = fs::write(&path, &content);
+//         if write_result.is_err() {
+//             warn!("Failed to write to certificate at {}", path);
+//         }
+//     } else {
+//         warn!(
+//             "Failed to backup certificate at {} to {}",
+//             path, backup_path
+//         );
+//     }
+// }
+
+/// Prints the paths.
+fn print_paths(paths: ReplacePaths) {
+    println!("Matching certificates:");
+    for cert in paths.certs {
+        println!("\t{:#?}", cert);
     }
+    println!("Matching certificates:");
+    for key in paths.keys {
+        println!("\t{:#?}", key);
+    }
+}
+
+/// Replaces the paths with the new data.
+fn replace_paths(paths: ReplacePaths, cert: Cert, privkey: Option<PrivKey>) {
+    todo!("Implement replacing.")
 }
