@@ -4,6 +4,7 @@ mod parse;
 use model::*;
 use parse::*;
 
+use chrono::Utc;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -215,16 +216,23 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
         Err(err) => panic!("Failed to convert new certificate to PEM: {:?}", err),
     };
 
-    let pkey_pem = if let Some(privkey) = privkey {
+    let (pkey_pem, pkey_path) = if let Some(privkey) = privkey {
         match privkey.key.private_key_to_pem_pkcs8() {
-            Ok(pem) => pem,
+            Ok(pem) => (pem, privkey.locator.path),
             Err(err) => panic!("Failed to convert new private key to PEM: {:?}", err),
         }
     } else {
-        vec![]
+        (vec![], PathBuf::new())
     };
 
     for (path, pems) in pems_by_path(targets) {
+        if (path == cert.locator.path) | (path == pkey_path) {
+            continue;
+        }
+        if let Err(err) = backup_file(&path) {
+            println!("Failed to backup file at {:#?}: {:#?}", path, err);
+            continue;
+        }
         let mut content = match fs::read(&path) {
             Err(err) => {
                 println!(
@@ -257,4 +265,19 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
             println!("Error writing: {:?}", err)
         };
     }
+}
+
+/// Creates a backup of a file with ".<timestamp>.bkp" appended to the filename.
+fn backup_file(path: &PathBuf) -> Result<(), io::Error> {
+    let ext = match path.extension() {
+        None => String::new(),
+        Some(os_str) => os_str.to_string_lossy().to_string(),
+    };
+    let mut bkp_path = path.clone();
+    bkp_path.set_extension(format!(
+        "{ext}.{}.bkp",
+        Utc::now().format("%y-%m-%d-T%H-%M")
+    ));
+    fs::copy(path, bkp_path)?;
+    return Ok(());
 }
