@@ -114,7 +114,7 @@ pub fn parse_cert(content: &[u8]) -> Option<X509> {
     };
 }
 
-const IGNORED_LABELS: [&str; 1] = ["TRUSTED CERTIFICATE"];
+const IGNORED_LABELS: [&str; 3] = ["TRUSTED CERTIFICATE", "X509 CRL", "PUBLIC KEY"];
 
 /// Parses X509 certs and privkeys from a PEM encoded file.
 pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
