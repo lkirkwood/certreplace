@@ -74,16 +74,16 @@ impl Verb {
 
 // PKI Objects
 
-#[derive(Debug, Clone)]
 /// Models an X509 certificate.
+#[derive(Debug, Clone)]
 pub struct Cert {
     pub cert: X509,
     pub common_name: String,
     pub locator: PEMLocator,
 }
 
-#[derive(Debug, Clone)]
 /// Models an X509 certificate private key.
+#[derive(Debug, Clone)]
 pub struct PrivKey {
     /// Private key.
     pub key: PKey<Private>,
@@ -108,9 +108,18 @@ pub struct PEMPart<'a> {
     pub start: usize,
 }
 
+/// Kinds of PEMParts that can exist.
 #[derive(Debug, Clone)]
+pub enum PEMKind {
+    Cert,
+    PrivKey,
+}
+
 /// Models the location of a PEMPart on disk.
+#[derive(Debug, Clone)]
 pub struct PEMLocator {
+    /// Kind of data in this PEMPart.
+    pub kind: PEMKind,
     /// Path to the file containing the bytes.
     pub path: PathBuf,
     /// Index of the start of the bytes in the file.
@@ -119,8 +128,8 @@ pub struct PEMLocator {
     pub end: usize,
 }
 
-#[derive(Debug)]
 /// Holds paths of all the objects to be replaced.
+#[derive(Debug)]
 pub struct ReplacePaths {
     pub certs: Vec<PEMLocator>,
     pub keys: Vec<PEMLocator>,
