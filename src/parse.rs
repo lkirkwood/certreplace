@@ -166,33 +166,20 @@ const PEM_END: [char; 5] = ['-', 'E', 'N', 'D', ' '];
 
 /// Parses the data into PEM parts.
 pub fn get_pem_parts<'a>(data: &'a [u8]) -> Result<Vec<PEMPart<'a>>, ParseError> {
-    let string = match str::from_utf8(data) {
-        Ok(_string) => _string,
-        Err(err) => {
-            return Err(ParseError {
-                msg: format!("Failed to decode file data as utf-8: {:?}", err),
-            })
-        }
-    };
     let mut parts = Vec::new();
 
     let mut in_boundary = false;
-    let mut in_part = false;
     let mut in_end = false;
     let mut start = 0;
 
     let mut index = 0;
-    let mut part_buf = Vec::new();
     let mut buf = VecDeque::new();
-    for char in string.chars() {
+    for byte in data {
+        let char = char::from(byte.to_owned());
         index += 1;
         buf.push_back(char);
         if buf.len() > 5 {
             buf.pop_front();
-        }
-
-        if in_part | in_boundary {
-            part_buf.push(char);
         }
 
         if buf == PEM_BOUNDARY {
@@ -205,10 +192,8 @@ pub fn get_pem_parts<'a>(data: &'a [u8]) -> Result<Vec<PEMPart<'a>>, ParseError>
                 })
             }
         } else if in_boundary & (buf == PEM_BEGIN) {
-            in_part = true;
             start = index - 10;
         } else if in_boundary & (buf == PEM_END) {
-            in_part = false;
             in_end = true;
         }
     }
