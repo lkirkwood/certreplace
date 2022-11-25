@@ -109,7 +109,7 @@ pub struct PEMPart<'a> {
 }
 
 /// Kinds of PEMParts that can exist.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PEMKind {
     Cert,
     PrivKey,
