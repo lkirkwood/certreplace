@@ -114,37 +114,41 @@ pub fn parse_cert(content: &[u8]) -> Option<X509> {
     };
 }
 
+const IGNORED_LABELS: [&str; 1] = ["TRUSTED CERTIFICATE"];
+
 /// Parses X509 certs and privkeys from a PEM encoded file.
 pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
     let mut pkiobjs = Vec::new();
     match fs::read(&path) {
         Ok(content) => {
             for part in get_pem_parts(&content)? {
-                if let Some(privkey) = parse_privkey(part.data) {
-                    pkiobjs.push(PKIObject::PrivKey(PrivKey {
-                        key: privkey,
-                        locator: PEMLocator {
-                            kind: PEMKind::PrivKey,
-                            path: path.clone(),
-                            start: part.start,
-                            end: part.start + part.data.len(),
-                        },
-                    }));
-                } else if let Some(cert) = parse_cert(part.data) {
-                    if let Some(common_name) = get_cn(&cert) {
-                        pkiobjs.push(PKIObject::Cert(Cert {
-                            cert,
-                            common_name,
+                if !IGNORED_LABELS.contains(&part.label.as_ref()) {
+                    if let Some(privkey) = parse_privkey(part.data) {
+                        pkiobjs.push(PKIObject::PrivKey(PrivKey {
+                            key: privkey,
                             locator: PEMLocator {
-                                kind: PEMKind::Cert,
+                                kind: PEMKind::PrivKey,
                                 path: path.clone(),
                                 start: part.start,
                                 end: part.start + part.data.len(),
                             },
                         }));
+                    } else if let Some(cert) = parse_cert(part.data) {
+                        if let Some(common_name) = get_cn(&cert) {
+                            pkiobjs.push(PKIObject::Cert(Cert {
+                                cert,
+                                common_name,
+                                locator: PEMLocator {
+                                    kind: PEMKind::Cert,
+                                    path: path.clone(),
+                                    start: part.start,
+                                    end: part.start + part.data.len(),
+                                },
+                            }));
+                        }
+                    } else {
+                        println!("Failed to parse PKI object from PEM part at: {:?}", path);
                     }
-                } else {
-                    println!("Failed to parse PKI object from PEM part at: {:?}", path);
                 }
             }
         }
@@ -163,14 +167,18 @@ pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
 const PEM_BOUNDARY: [char; 5] = ['-', '-', '-', '-', '-'];
 const PEM_BEGIN: [char; 5] = ['B', 'E', 'G', 'I', 'N'];
 const PEM_END: [char; 5] = ['-', 'E', 'N', 'D', ' '];
+const LABEL_TRIM: [char; 2] = ['-', ' '];
 
 /// Parses the data into PEM parts.
 pub fn get_pem_parts<'a>(data: &'a [u8]) -> Result<Vec<PEMPart<'a>>, ParseError> {
     let mut parts = Vec::new();
 
     let mut in_boundary = false;
+    let mut in_label = false;
     let mut in_end = false;
+
     let mut start = 0;
+    let mut label = String::new();
 
     let mut index = 0;
     let mut buf = VecDeque::new();
@@ -184,17 +192,24 @@ pub fn get_pem_parts<'a>(data: &'a [u8]) -> Result<Vec<PEMPart<'a>>, ParseError>
 
         if buf == PEM_BOUNDARY {
             in_boundary ^= true;
+            in_label = false;
+
             if in_end {
                 in_end = false;
                 parts.push(PEMPart {
+                    label: label.trim_matches(&LABEL_TRIM as &[_]).to_string(),
                     data: &data[start..index],
                     start,
-                })
+                });
+                label = String::new();
             }
         } else if in_boundary & (buf == PEM_BEGIN) {
             start = index - 10;
+            in_label = true;
         } else if in_boundary & (buf == PEM_END) {
             in_end = true;
+        } else if in_label {
+            label.push(char);
         }
     }
     return Ok(parts);

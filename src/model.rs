@@ -102,6 +102,7 @@ pub enum PKIObject {
 /// Models a single part of a PEM file.
 #[derive(Debug)]
 pub struct PEMPart<'a> {
+    pub label: String,
     /// Data contained in the part.
     pub data: &'a [u8],
     /// Index of the start of the bytes in the file.
