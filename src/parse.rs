@@ -144,7 +144,7 @@ pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
                         }));
                     }
                 } else {
-                    println!("Failed to parse PKI object from PEM part: {:?}", part);
+                    println!("Failed to parse PKI object from PEM part at: {:?}", path);
                 }
             }
         }
