@@ -10,7 +10,7 @@ use std::{fs, str};
 
 /// Finds certificates in the path that match the cn, and returns them.
 /// Finds their matching privkeys if the parameter is true.
-pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> ReplacePaths {
+pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> Vec<PEMLocator> {
     let mut certs = Vec::new();
     let mut keys = Vec::new();
     for path in find_pkiobj_files(path) {
@@ -31,14 +31,13 @@ pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> ReplacePaths {
         }
     }
 
-    let mut matched_certs = Vec::new();
-    let mut matched_keys = Vec::new();
+    let mut pems = Vec::new();
     for cert in certs {
         if cert.common_name == cn {
             if privkeys {
                 match match_privkeys(&cert.cert, keys) {
                     Ok((matched, unmatched)) => {
-                        matched_keys.extend(matched);
+                        pems.extend(matched.into_iter().map(|k| k.locator));
                         keys = unmatched;
                     }
                     Err((err, unmatched)) => {
@@ -47,14 +46,11 @@ pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> ReplacePaths {
                     }
                 }
             }
-            matched_certs.push(cert.locator);
+            pems.push(cert.locator);
         }
     }
 
-    return ReplacePaths {
-        certs: matched_certs,
-        keys: matched_keys.into_iter().map(|k| k.locator).collect(),
-    };
+    return pems;
 }
 
 pub fn find_pkiobj_files(path: PathBuf) -> Vec<PathBuf> {

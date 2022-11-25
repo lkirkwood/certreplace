@@ -127,10 +127,3 @@ pub struct PEMLocator {
     /// Index of the end of the bytes in the file.
     pub end: usize,
 }
-
-/// Holds paths of all the objects to be replaced.
-#[derive(Debug)]
-pub struct ReplacePaths {
-    pub certs: Vec<PEMLocator>,
-    pub keys: Vec<PEMLocator>,
-}
