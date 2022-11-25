@@ -1,5 +1,4 @@
 use crate::model::*;
-use log::{error, warn};
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Private};
 use openssl::x509::X509;
@@ -16,7 +15,7 @@ pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> ReplacePaths {
     let mut keys = Vec::new();
     for path in find_pkiobj_files(path) {
         match parse_pkiobjs(path) {
-            Err(err) => error!("{:?}", err),
+            Err(err) => println!("{:?}", err),
             Ok(pkiobjs) => {
                 for pkiobj in pkiobjs {
                     match pkiobj {
@@ -43,7 +42,7 @@ pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> ReplacePaths {
                         keys = unmatched;
                     }
                     Err((err, unmatched)) => {
-                        error!("Error on cert at {:?}: {:?}", cert.locator, err);
+                        println!("Error on cert at {:?}: {:?}", cert.locator, err);
                         keys = unmatched;
                     }
                 }
@@ -61,11 +60,11 @@ pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> ReplacePaths {
 pub fn find_pkiobj_files(path: PathBuf) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     match fs::read_dir(&path) {
-        Err(err) => error!("Failed while reading directory in {:?}: {:?}", path, err),
+        Err(err) => println!("Failed while reading directory in {:?}: {:?}", path, err),
         Ok(entries) => {
             for entry in entries {
                 if let Err(err) = entry {
-                    error!("Failed while reading directory in {:?}: {:?}", path, err);
+                    println!("Failed while reading directory in {:?}: {:?}", path, err);
                     continue;
                 } else {
                     let entry = entry.unwrap();
@@ -129,6 +128,7 @@ pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
                     pkiobjs.push(PKIObject::PrivKey(PrivKey {
                         key: privkey,
                         locator: PEMLocator {
+                            kind: PEMKind::PrivKey,
                             path: path.clone(),
                             start: part.start,
                             end: part.start + part.data.len(),
@@ -140,6 +140,7 @@ pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
                             cert,
                             common_name,
                             locator: PEMLocator {
+                                kind: PEMKind::Cert,
                                 path: path.clone(),
                                 start: part.start,
                                 end: part.start + part.data.len(),
@@ -147,7 +148,7 @@ pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
                         }));
                     }
                 } else {
-                    warn!("Failed to parse PKI object from PEM part: {:?}", part);
+                    println!("Failed to parse PKI object from PEM part: {:?}", part);
                 }
             }
         }
