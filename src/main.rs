@@ -3,6 +3,9 @@ mod parse;
 
 use model::*;
 use parse::*;
+
+use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
 use std::{
     io::{self, Write},
@@ -50,12 +53,12 @@ fn main() {
     if get_user_consent(&verb) {
         let paths = find_certs(PathBuf::from(args.path), verb.cn(), verb.privkeys());
         match verb {
-            Verb::Find { cn: _ } => print_paths(paths),
+            Verb::Find { cn: _ } => print_pems(paths),
             Verb::Replace {
                 cn: _,
                 cert,
                 privkey,
-            } => replace_paths(paths, cert, privkey),
+            } => replace_pems(paths, cert, privkey),
         }
     } else {
         panic!(
@@ -178,18 +181,80 @@ fn get_user_consent(verb: &Verb) -> bool {
 // }
 
 /// Prints the paths.
-fn print_paths(paths: ReplacePaths) {
-    println!("Matching certificates:");
-    for cert in paths.certs {
-        println!("\t{:#?}", cert);
+fn print_pems(pems: Vec<PEMLocator>) {
+    println!("\nMatching certificates:");
+    for cert in &pems {
+        if cert.kind == PEMKind::Cert {
+            println!("\t{:#?}", cert.path);
+        }
     }
-    println!("Matching private keys:");
-    for key in paths.keys {
-        println!("\t{:#?}", key);
+    println!("\nMatching private keys:");
+    for key in &pems {
+        if key.kind == PEMKind::PrivKey {
+            println!("\t{:#?}", key.path);
+        }
     }
 }
 
-/// Replaces the paths with the new data.
-fn replace_paths(paths: ReplacePaths, cert: Cert, privkey: Option<PrivKey>) {
-    todo!("Implement replacing.")
+/// Maps file path to pems in that file.
+fn pems_by_path(pems: Vec<PEMLocator>) -> HashMap<PathBuf, Vec<PEMLocator>> {
+    let mut map = HashMap::new();
+    for pem in pems {
+        if !map.contains_key(&pem.path) {
+            map.insert(pem.path.clone(), vec![]);
+        }
+        map.get_mut(&pem.path).unwrap().push(pem);
+    }
+    return map;
+}
+
+/// Replaces the target pems with the new data.
+fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) {
+    let cert_pem = match cert.cert.to_pem() {
+        Ok(pem) => pem,
+        Err(err) => panic!("Failed to convert new certificate to PEM: {:?}", err),
+    };
+
+    let pkey_pem = if let Some(privkey) = privkey {
+        match privkey.key.private_key_to_pem_pkcs8() {
+            Ok(pem) => pem,
+            Err(err) => panic!("Failed to convert new private key to PEM: {:?}", err),
+        }
+    } else {
+        vec![]
+    };
+
+    for (path, pems) in pems_by_path(targets) {
+        let mut content = match fs::read(&path) {
+            Err(err) => {
+                println!(
+                    "Failed to read file marked for modification at {:?}: {:?}",
+                    path, err
+                );
+                return;
+            }
+            Ok(bytes) => bytes,
+        };
+
+        // pems always read in order, so offset can be scalar.
+        let mut offset: isize = 0;
+        for locator in pems {
+            let pem = match locator.kind {
+                PEMKind::Cert => &cert_pem,
+                PEMKind::PrivKey => &pkey_pem,
+            };
+            let (target_start, target_end) = (locator.start as isize, locator.end as isize);
+            let (start, end) = (
+                0.max(target_start + offset) as usize,
+                0.max(target_end + offset) as usize,
+            );
+            content = [&content[..start], pem, &content[end..]].concat();
+            offset += pem.len() as isize - (target_end - target_start);
+        }
+
+        println!("Replacing PEMs in {:?}", &path);
+        if let Err(err) = fs::write(path, content) {
+            println!("Error writing: {:?}", err)
+        };
+    }
 }
