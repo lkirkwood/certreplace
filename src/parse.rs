@@ -200,7 +200,7 @@ pub fn get_pem_parts<'a>(data: &'a [u8]) -> Result<Vec<PEMPart<'a>>, ParseError>
             if in_end {
                 in_end = false;
                 parts.push(PEMPart {
-                    data: &data[start..index + 1],
+                    data: &data[start..index],
                     start,
                 })
             }
