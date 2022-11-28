@@ -7,6 +7,7 @@ description = "CLI tool for replacing x509 certificates and their private keys."
 repository = "https://github.com/lirkwood/certreplace"
 keywords = ["x509", "ssl", "certificate", "tls"]
 categories = ["command-line-utilities", "config", "filesystem", "parsing"]
+license = "GPL-3.0-or-later"
 
 [dependencies]
 structopt = "0.3.25"
