@@ -2,8 +2,11 @@
 name = "certreplace"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Linus <linuskirkwood@gmail.com>"]
+description = "CLI tool for replacing x509 certificates and their private keys."
+repository = "https://github.com/lirkwood/certreplace"
+keywords = ["x509", "ssl", "certificate", "tls"]
+categories = ["command-line-utilities", "config", "filesystem", "parsing"]
 
 [dependencies]
 structopt = "0.3.25"
