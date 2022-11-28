@@ -14,18 +14,29 @@ use std::{
 };
 use structopt::StructOpt;
 
+const COMMON_NAME_HELP: &'static str = "Subject common name to match in x509 certificates.";
+
+const CERTIFICATE_HELP: &'static str =
+    "Path to file containing certificate to use as a replacement. \
+If this file contains only one certificate, no common name needs to be provided.
+Will just find matching certs if not provided.";
+
+const PRIVATE_KEY_HELP: &'static str =
+    "Path to file containing private key to use as a replacement. \
+Private keys will not be replaced if this is not provided.";
+
 #[derive(StructOpt)]
 pub struct Cli {
     /// Path to search in.
     pub path: String,
     /// Common name to match in target certificates.
-    #[structopt(short = "cn")]
+    #[structopt(short = "n", help = COMMON_NAME_HELP)]
     pub common_name: Option<String>,
     /// Path to public key to use as replacement.
-    #[structopt(long = "cert")]
+    #[structopt(long = "cert", help = CERTIFICATE_HELP)]
     pub certificate: Option<String>,
     /// Path to private key to use as replacement.
-    #[structopt(long = "priv")]
+    #[structopt(long = "priv", help = PRIVATE_KEY_HELP)]
     pub private_key: Option<String>,
 }
 
@@ -69,7 +80,7 @@ fn main() {
     }
 }
 
-/// Chooses a certificate matching a common name from some pki objs,
+/// Chooses a certificate matching a common name from a file of pki objs,
 /// or returns an error if there is no unique match.
 fn choose_cert(path: &str, cn: Option<&String>) -> Result<Cert, ParseError> {
     let path = PathBuf::from(path);
@@ -113,7 +124,7 @@ fn choose_cert(path: &str, cn: Option<&String>) -> Result<Cert, ParseError> {
     }
 }
 
-/// Chooses a private key matching a cert from some pki objs,
+/// Chooses a private key matching a cert from a file of pki objs,
 /// or returns an error if there is no unique match.
 fn choose_privkey(path: &str, cert: &Cert) -> Result<PrivKey, ParseError> {
     if let Ok(pubkey) = cert.cert.public_key() {
@@ -165,23 +176,7 @@ fn get_user_consent(verb: &Verb) -> bool {
     return input.to_lowercase().starts_with("y");
 }
 
-// fn replace_cert(path: &str, content: &str) {
-//     let backup_path = format!("{}.bkp", &path);
-//     let backup_result = fs::copy(path, &backup_path); // TODO add date
-//     if backup_result.is_ok() {
-//         let write_result = fs::write(&path, &content);
-//         if write_result.is_err() {
-//             warn!("Failed to write to certificate at {}", path);
-//         }
-//     } else {
-//         warn!(
-//             "Failed to backup certificate at {} to {}",
-//             path, backup_path
-//         );
-//     }
-// }
-
-/// Prints the paths.
+/// Prints the locations of pems.
 fn print_pems(pems: Vec<PEMLocator>) {
     println!("\nMatching certificates:");
     for cert in &pems {
@@ -197,7 +192,7 @@ fn print_pems(pems: Vec<PEMLocator>) {
     }
 }
 
-/// Maps file path to pems in that file.
+/// Maps pems by their file paths.
 fn pems_by_path(pems: Vec<PEMLocator>) -> HashMap<PathBuf, Vec<PEMLocator>> {
     let mut map = HashMap::new();
     for pem in pems {
