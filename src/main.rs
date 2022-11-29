@@ -36,10 +36,10 @@ pub struct Cli {
     /// Common name to match in target certificates.
     #[structopt(short = "n", help = COMMON_NAME_HELP)]
     pub common_name: Option<String>,
-    /// Path to public key to use as replacement.
+    /// Path to file with x509 certificate to use as replacement.
     #[structopt(long = "cert", help = CERTIFICATE_HELP)]
     pub certificate: Option<String>,
-    /// Path to private key to use as replacement.
+    /// Path to file with private key to use as replacement.
     #[structopt(long = "priv", help = PRIVATE_KEY_HELP)]
     pub private_key: Option<String>,
 }
