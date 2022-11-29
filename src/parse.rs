@@ -53,6 +53,7 @@ pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> Vec<PEMLocator> {
     return pems;
 }
 
+/// Finds files with pem/crt/key/cer/der extensions in the provided path.
 pub fn find_pkiobj_files(path: PathBuf) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     match fs::read_dir(&path) {
@@ -73,7 +74,7 @@ pub fn find_pkiobj_files(path: PathBuf) -> Vec<PathBuf> {
                                 entry.file_name().to_string_lossy().rsplit_once('.')
                             {
                                 match ext {
-                                    "pem" | "crt" | "cer" | "der" | "key" => {
+                                    "pem" | "crt" | "key" | "cer" | "der" => {
                                         paths.push(entry.path())
                                     }
                                     _ => {}
@@ -90,7 +91,7 @@ pub fn find_pkiobj_files(path: PathBuf) -> Vec<PathBuf> {
 
 // Parsing
 
-/// Parses a private key from a file.
+/// Parses a private key from some bytes.
 pub fn parse_privkey(content: &[u8]) -> Option<PKey<Private>> {
     if let Ok(pkey) = PKey::private_key_from_pem(&content) {
         return Some(pkey);
@@ -114,6 +115,7 @@ pub fn parse_cert(content: &[u8]) -> Option<X509> {
     };
 }
 
+/// PEM labels for objects we dont care about.
 const IGNORED_LABELS: [&str; 3] = ["TRUSTED CERTIFICATE", "X509 CRL", "PUBLIC KEY"];
 
 /// Parses X509 certs and privkeys from a PEM encoded file.
@@ -164,9 +166,13 @@ pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
     return Ok(pkiobjs);
 }
 
+/// The chars at the beginning or end of a PEM boundary.
 const PEM_BOUNDARY: [char; 5] = ['-', '-', '-', '-', '-'];
+/// The chars at the beginning of a PEM start label.
 const PEM_BEGIN: [char; 5] = ['B', 'E', 'G', 'I', 'N'];
+/// The chars at the beginning of a PEM end label.
 const PEM_END: [char; 5] = ['-', 'E', 'N', 'D', ' '];
+/// Some chars to strip off a PEM label.
 const LABEL_TRIM: [char; 2] = ['-', ' '];
 
 /// Parses the data into PEM parts.

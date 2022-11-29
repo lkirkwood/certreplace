@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 // Error
 
+/// Error occurring while parsing certificates or private keys.
 #[derive(Debug)]
 pub struct ParseError {
     pub msg: String,
@@ -18,11 +19,12 @@ impl Display for ParseError {
 
 // Model
 
+/// The action for the app to perform.
 #[derive(Debug)]
 pub enum Verb {
-    Find {
-        cn: String,
-    },
+    /// Find certificates and their matching private keys.
+    Find { cn: String },
+    /// Replace certificates, and optionally their private keys.
     Replace {
         cn: String,
         cert: Cert,
@@ -74,7 +76,7 @@ impl Verb {
 
 // PKI Objects
 
-/// Models an X509 certificate.
+/// An X509 certificate.
 #[derive(Debug, Clone)]
 pub struct Cert {
     pub cert: X509,
@@ -82,7 +84,7 @@ pub struct Cert {
     pub locator: PEMLocator,
 }
 
-/// Models an X509 certificate private key.
+/// An X509 certificate private key.
 #[derive(Debug, Clone)]
 pub struct PrivKey {
     /// Private key.
@@ -91,6 +93,7 @@ pub struct PrivKey {
     pub locator: PEMLocator,
 }
 
+/// A X509 certificate or private key.
 #[derive(Debug)]
 pub enum PKIObject {
     Cert(Cert),
@@ -99,7 +102,7 @@ pub enum PKIObject {
 
 // File objects
 
-/// Models a single part of a PEM file.
+/// A single part of a PEM file.
 #[derive(Debug)]
 pub struct PEMPart<'a> {
     pub label: String,
@@ -116,7 +119,7 @@ pub enum PEMKind {
     PrivKey,
 }
 
-/// Models the location of a PEMPart on disk.
+/// Describes the location of a PEMPart on disk.
 #[derive(Debug, Clone)]
 pub struct PEMLocator {
     /// Kind of data in this PEMPart.

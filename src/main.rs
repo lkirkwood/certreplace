@@ -14,17 +14,21 @@ use std::{
 };
 use structopt::StructOpt;
 
+/// The help text to display for the common name parameter.
 const COMMON_NAME_HELP: &'static str = "Subject common name to match in x509 certificates.";
 
+/// The help text to display for the certificate parameter.
 const CERTIFICATE_HELP: &'static str =
     "Path to file containing certificate to use as a replacement. \
 If this file contains only one certificate, no common name needs to be provided.
 Will just find matching certs if not provided.";
 
+/// The help text to display for the private key parameter.
 const PRIVATE_KEY_HELP: &'static str =
     "Path to file containing private key to use as a replacement. \
 Private keys will not be replaced if this is not provided.";
 
+/// Structopt cli struct.
 #[derive(StructOpt)]
 pub struct Cli {
     /// Path to search in.
@@ -40,6 +44,7 @@ pub struct Cli {
     pub private_key: Option<String>,
 }
 
+/// Main loop of the app.
 fn main() {
     let args = Cli::from_args();
 
@@ -262,7 +267,7 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
     }
 }
 
-/// Creates a backup of a file with ".<timestamp>.bkp" appended to the filename.
+/// Creates a backup of a file with ".\<timestamp\>.bkp" appended to the filename.
 fn backup_file(path: &PathBuf) -> Result<(), io::Error> {
     let ext = match path.extension() {
         None => String::new(),
