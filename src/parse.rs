@@ -121,46 +121,34 @@ const IGNORED_LABELS: [&str; 3] = ["TRUSTED CERTIFICATE", "X509 CRL", "PUBLIC KE
 /// Parses X509 certs and privkeys from a PEM encoded file.
 pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
     let mut pkiobjs = Vec::new();
-    match fs::read(&path) {
-        Ok(content) => {
-            for part in get_pem_parts(&content)? {
-                if !IGNORED_LABELS.contains(&part.label.as_ref()) {
-                    if let Some(privkey) = parse_privkey(part.data) {
-                        pkiobjs.push(PKIObject::PrivKey(PrivKey {
-                            key: privkey,
+    if let Ok(content) = fs::read(&path) {
+        for part in get_pem_parts(&content)? {
+            if !IGNORED_LABELS.contains(&part.label.as_ref()) {
+                if let Some(privkey) = parse_privkey(part.data) {
+                    pkiobjs.push(PKIObject::PrivKey(PrivKey {
+                        key: privkey,
+                        locator: PEMLocator {
+                            kind: PEMKind::PrivKey,
+                            path: path.clone(),
+                            start: part.start,
+                            end: part.start + part.data.len(),
+                        },
+                    }));
+                } else if let Some(cert) = parse_cert(part.data) {
+                    if let Some(common_name) = get_cn(&cert) {
+                        pkiobjs.push(PKIObject::Cert(Cert {
+                            cert,
+                            common_name,
                             locator: PEMLocator {
-                                kind: PEMKind::PrivKey,
+                                kind: PEMKind::Cert,
                                 path: path.clone(),
                                 start: part.start,
                                 end: part.start + part.data.len(),
                             },
                         }));
-                    } else if let Some(cert) = parse_cert(part.data) {
-                        if let Some(common_name) = get_cn(&cert) {
-                            pkiobjs.push(PKIObject::Cert(Cert {
-                                cert,
-                                common_name,
-                                locator: PEMLocator {
-                                    kind: PEMKind::Cert,
-                                    path: path.clone(),
-                                    start: part.start,
-                                    end: part.start + part.data.len(),
-                                },
-                            }));
-                        }
-                    } else {
-                        println!("Failed to parse PKI object from PEM part at: {:?}", path);
                     }
                 }
             }
-        }
-        Err(err) => {
-            return Err(ParseError {
-                msg: format!(
-                    "Failed to read contents of potential cert at {:?}: {:?}",
-                    path, err
-                ),
-            })
         }
     };
     return Ok(pkiobjs);
