@@ -93,7 +93,7 @@ pub fn find_pkiobj_files(path: PathBuf) -> Vec<PathBuf> {
 
 /// Parses a private key from some bytes.
 pub fn parse_privkey(content: &[u8]) -> Option<PKey<Private>> {
-    if let Ok(pkey) = PKey::private_key_from_pem(&content) {
+    if let Ok(pkey) = PKey::private_key_from_pem_passphrase(&content, &[]) {
         return Some(pkey);
     } else if let Ok(pkey) = PKey::private_key_from_der(&content) {
         return Some(pkey);
