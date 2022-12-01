@@ -28,6 +28,10 @@ const PRIVATE_KEY_HELP: &'static str =
     "Path to file containing private key to use as a replacement. \
 Private keys will not be replaced if this is not provided.";
 
+/// The help text to display for the force parameter.
+const FORCE_HELP: &'static str =
+    "If this is set the user will not be prompted to confirm the operation.";
+
 /// Structopt cli struct.
 #[derive(StructOpt)]
 pub struct Cli {
@@ -42,6 +46,9 @@ pub struct Cli {
     /// Path to file with private key to use as replacement.
     #[structopt(long = "priv", help = PRIVATE_KEY_HELP)]
     pub private_key: Option<String>,
+    /// Whether to force the operation (don't prompt for confirmation)
+    #[structopt(short = "f", long = "force", help = FORCE_HELP)]
+    pub force: bool,
 }
 
 /// Main loop of the app.
@@ -67,7 +74,7 @@ fn main() {
         },
     };
 
-    if get_user_consent(&verb) {
+    if args.force || confirm_action(&verb) {
         let paths = find_certs(PathBuf::from(args.path), verb.cn(), verb.privkeys());
         match verb {
             Verb::Find { cn: _ } => print_pems(paths),
@@ -168,17 +175,33 @@ fn choose_privkey(path: &str, cert: &Cert) -> Result<PrivKey, ParseError> {
 }
 
 /// Returns true if user confirms operation.
-fn get_user_consent(verb: &Verb) -> bool {
-    print!("{}; Okay? (y/n): ", verb);
-    io::stdout()
-        .flush()
-        .expect("Failed to flush stdout when printing confirmation message.");
-
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Failed to read user confirmation for target common name.");
-    return input.to_lowercase().starts_with("y");
+fn confirm_action(verb: &Verb) -> bool {
+    match verb {
+        Verb::Find { cn: _ } => {
+            println!("{verb}");
+            return true;
+        }
+        Verb::Replace {
+            cn: _,
+            cert,
+            privkey,
+        } => {
+            println!("{verb}");
+            println!("Replacement certificate: {:?}", cert.locator.path);
+            if let Some(privkey) = privkey {
+                println!("Replacement private key: {:?}", privkey.locator.path);
+            }
+            print!("Okay? (y/n) ");
+            io::stdout()
+                .flush()
+                .expect("Failed to flush stdout when printing confirmation message.");
+            let mut input = String::new();
+            io::stdin()
+                .read_line(&mut input)
+                .expect("Failed to read user confirmation for target common name.");
+            return input.to_lowercase().starts_with("y");
+        }
+    }
 }
 
 /// Prints the locations of pems.
