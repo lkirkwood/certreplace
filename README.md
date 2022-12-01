@@ -21,7 +21,7 @@ This does not affect the other data in the file.
 If you only provide the certificate path, and the file only contains one x509 certificate,
 the common name will be extracted and used to find certificates to replace.
 
-`certreplace /path [-c <string>] --cert <path> --privkey <path>`
+`certreplace /path [-c <string>] --cert <path> --priv <path>`
 
 If you provide a path to a file containing a single private key 
 that matches the given certificate's public key, any private keys found that match
