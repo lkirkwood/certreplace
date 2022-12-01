@@ -13,3 +13,4 @@ license = "GPL-3.0-or-later"
 structopt = "0.3.25"
 openssl = {version = "0.10.42", features = ["vendored"]}
 chrono = "0.4.23"
+jwalk = "0.6.0"

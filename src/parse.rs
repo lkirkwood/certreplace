@@ -1,4 +1,5 @@
 use crate::model::*;
+use jwalk::WalkDir;
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Private};
 use openssl::x509::X509;
@@ -55,32 +56,14 @@ pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> Vec<PEMLocator> {
 
 /// Finds files with pem/crt/key/cer/der extensions in the provided path.
 pub fn find_pkiobj_files(path: PathBuf) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-    match fs::read_dir(&path) {
-        Err(err) => println!("Failed while reading directory in {:?}: {:?}", path, err),
-        Ok(entries) => {
-            for entry in entries {
-                if let Err(err) = entry {
-                    println!("Failed while reading directory in {:?}: {:?}", path, err);
-                    continue;
-                } else {
-                    let entry = entry.unwrap();
-                    if let Ok(ftype) = entry.file_type() {
-                        if ftype.is_dir() {
-                            // Recurse
-                            paths.extend(find_pkiobj_files(entry.path()));
-                        } else {
-                            if let Some((_, ext)) =
-                                entry.file_name().to_string_lossy().rsplit_once('.')
-                            {
-                                match ext {
-                                    "pem" | "crt" | "key" | "cer" | "der" => {
-                                        paths.push(entry.path())
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
+    let mut paths = vec![];
+    for read in WalkDir::new(path).into_iter() {
+        if let Ok(file) = read {
+            if let Some(name) = file.file_name.to_str() {
+                if let Some((_, ext)) = name.rsplit_once('.') {
+                    match ext {
+                        "pem" | "crt" | "key" | "cer" | "der" => paths.push(file.path()),
+                        _ => {}
                     }
                 }
             }
