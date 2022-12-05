@@ -3,8 +3,8 @@ mod parse;
 
 use model::*;
 use parse::*;
+use time::format_description::well_known::iso8601::EncodedConfig;
 
-use chrono::Utc;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -13,6 +13,10 @@ use std::{
     str,
 };
 use structopt::StructOpt;
+use time::{
+    format_description::well_known::iso8601::{Config, Iso8601},
+    OffsetDateTime,
+};
 
 /// The help text to display for the common name parameter.
 const COMMON_NAME_HELP: &'static str = "Subject common name to match in x509 certificates.";
@@ -232,6 +236,16 @@ fn pems_by_path(pems: Vec<PEMLocator>) -> HashMap<PathBuf, Vec<PEMLocator>> {
     return map;
 }
 
+/// Configures the format of the Iso8601 datetime.
+const DATETIME_FORMAT_CONFIG: EncodedConfig = Config::DEFAULT
+    .set_use_separators(false)
+    .set_time_precision(
+        time::format_description::well_known::iso8601::TimePrecision::Minute {
+            decimal_digits: None,
+        },
+    )
+    .encode();
+
 /// Replaces the target pems with the new data.
 fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) {
     let cert_pem = match cert.cert.to_pem() {
@@ -248,11 +262,16 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
         (vec![], PathBuf::new())
     };
 
+    let now = match OffsetDateTime::now_utc().format(&(Iso8601 as Iso8601<DATETIME_FORMAT_CONFIG>))
+    {
+        Ok(datetime) => datetime,
+        Err(err) => panic!("Failed to format datetime: {err:?}"),
+    };
     for (path, pems) in pems_by_path(targets) {
         if (path == cert.locator.path) | (path == pkey_path) {
             continue;
         }
-        if let Err(err) = backup_file(&path) {
+        if let Err(err) = backup_file(&path, &now) {
             println!("Failed to backup file at {:#?}: {:#?}", path, err);
             continue;
         }
@@ -290,17 +309,14 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
     }
 }
 
-/// Creates a backup of a file with ".\<timestamp\>.bkp" appended to the filename.
-fn backup_file(path: &PathBuf) -> Result<(), io::Error> {
+/// Creates a backup of a file with the provided datetime and ".bkp" appended to the filename.
+fn backup_file(path: &PathBuf, datetime: &str) -> Result<(), io::Error> {
     let ext = match path.extension() {
         None => String::new(),
         Some(os_str) => os_str.to_string_lossy().to_string(),
     };
     let mut bkp_path = path.clone();
-    bkp_path.set_extension(format!(
-        "{ext}.{}.bkp",
-        Utc::now().format("%y-%m-%d-T%H-%M")
-    ));
+    bkp_path.set_extension(format!("{ext}.{datetime}.bkp",));
     fs::copy(path, bkp_path)?;
     return Ok(());
 }
