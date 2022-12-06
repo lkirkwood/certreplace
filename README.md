@@ -4,13 +4,13 @@ A tool for replacing SSL certificates and their associated private keys.
 
 ## Usage
 
-`certreplace /path/to/search -cn <string>`
+`certreplace /path/to/search -n <string>`
 
 Certreplace will, given a string, find all of the PEM encoded x509 certificates in the path provided
 with the same subject common name as the string. 
 Additionally, it will find all the PEM, DER or PKCS8 private keys that match at least one certificate.
 
-`certreplace /path -cn <string> --cert <path>`
+`certreplace /path -n <string> --cert <path>`
 
 If you provide the path to a file containing only one certificate with the correct common name,
 all other certificates that are found will be replaced with the one found in the provided file.
