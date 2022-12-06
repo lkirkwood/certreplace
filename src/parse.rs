@@ -221,3 +221,44 @@ pub fn get_cn(cert: &X509) -> Option<String> {
     }
     return None;
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::model::{PEMKind, PEMLocator};
+
+    use super::{find_certs, find_pkiobj_files};
+
+    fn found_certs() -> Vec<PEMLocator> {
+        return vec![PEMLocator {
+            start: 456,
+            end: 1716,
+            kind: PEMKind::Cert,
+            path: PathBuf::from("test/search/alice.pem"),
+        }];
+    }
+
+    #[test]
+    fn test_find_certs() {
+        let found = find_certs(
+            PathBuf::from("test/search/alice.pem"),
+            "GlobalSign Root CA",
+            false,
+        );
+        assert_eq!(found_certs(), found);
+    }
+
+    fn found_pkiobj_files() -> Vec<PathBuf> {
+        return vec![
+            PathBuf::from("test/search/alice.pem"),
+            PathBuf::from("test/search/bob.pem"),
+        ];
+    }
+
+    #[test]
+    fn test_find_pkiobj_files() {
+        let found = find_pkiobj_files(PathBuf::from("test/search"));
+        assert_eq!(found_pkiobj_files(), found);
+    }
+}
