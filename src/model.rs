@@ -103,7 +103,7 @@ pub enum PKIObject {
 // File objects
 
 /// A single part of a PEM file.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct PEMPart<'a> {
     pub label: String,
     /// Data contained in the part.
@@ -120,7 +120,7 @@ pub enum PEMKind {
 }
 
 /// Describes the location of a PEMPart on disk.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PEMLocator {
     /// Kind of data in this PEMPart.
     pub kind: PEMKind,
