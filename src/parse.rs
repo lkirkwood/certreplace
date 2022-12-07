@@ -231,28 +231,32 @@ mod tests {
     use super::{find_certs, find_pkiobj_files};
 
     fn found_certs() -> Vec<PEMLocator> {
-        return vec![PEMLocator {
-            start: 456,
-            end: 1716,
-            kind: PEMKind::Cert,
-            path: PathBuf::from("test/search/alice.pem"),
-        }];
+        return vec![
+            PEMLocator {
+                start: 0,
+                end: 3322,
+                kind: PEMKind::PrivKey,
+                path: PathBuf::from("test/search/bob.key"),
+            },
+            PEMLocator {
+                start: 16857,
+                end: 18901,
+                kind: PEMKind::Cert,
+                path: PathBuf::from("test/search/alice.pem"),
+            },
+        ];
     }
 
     #[test]
     fn test_find_certs() {
-        let found = find_certs(
-            PathBuf::from("test/search/alice.pem"),
-            "GlobalSign Root CA",
-            false,
-        );
+        let found = find_certs(PathBuf::from("test/search/"), "localhost", true);
         assert_eq!(found_certs(), found);
     }
 
     fn found_pkiobj_files() -> Vec<PathBuf> {
         return vec![
+            PathBuf::from("test/search/bob.key"),
             PathBuf::from("test/search/alice.pem"),
-            PathBuf::from("test/search/bob.pem"),
         ];
     }
 
