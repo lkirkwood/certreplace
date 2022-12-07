@@ -1,3 +1,3 @@
 /target
 *.code-workspace
-/test
+/test/input
