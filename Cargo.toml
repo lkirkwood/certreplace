@@ -1,6 +1,6 @@
 [package]
 name = "certreplace"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 authors = ["Linus <linuskirkwood@gmail.com>"]
 description = "CLI tool for replacing x509 certificates and their private keys."
