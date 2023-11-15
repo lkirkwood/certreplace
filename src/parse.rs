@@ -11,7 +11,7 @@ use std::{fs, str};
 
 /// Finds certificates in the path that match the cn, and returns them.
 /// Finds their matching privkeys if the parameter is true.
-pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> Vec<PEMLocator> {
+pub fn find_certs(path: PathBuf, cn: &CommonName, privkeys: bool) -> Vec<PEMLocator> {
     let mut certs = Vec::new();
     let mut keys = Vec::new();
     for path in find_pkiobj_files(path) {
@@ -21,7 +21,7 @@ pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> Vec<PEMLocator> {
                 for pkiobj in pkiobjs {
                     match pkiobj {
                         PKIObject::Cert(cert) => {
-                            if cert.common_name == cn {
+                            if cn.matches(&cert.common_name) {
                                 certs.push(cert);
                             }
                         }
@@ -34,7 +34,7 @@ pub fn find_certs(path: PathBuf, cn: &str, privkeys: bool) -> Vec<PEMLocator> {
 
     let mut pems = Vec::new();
     for cert in certs {
-        if cert.common_name == cn {
+        if cn.matches(&cert.common_name) {
             if privkeys {
                 match match_privkeys(&cert.cert, keys) {
                     Ok((matched, unmatched)) => {
@@ -224,9 +224,11 @@ pub fn get_cn(cert: &X509) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{collections::HashSet, path::PathBuf};
 
-    use crate::model::{PEMKind, PEMLocator};
+    use regex::Regex;
+
+    use crate::model::{CommonName, PEMKind, PEMLocator};
 
     use super::{find_certs, find_pkiobj_files};
 
@@ -249,20 +251,34 @@ mod tests {
 
     #[test]
     fn test_find_certs() {
-        let found = find_certs(PathBuf::from("test/search/"), "localhost", true);
+        let found = find_certs(
+            PathBuf::from("test/search/"),
+            &CommonName::Literal("localhost".to_string()),
+            true,
+        );
         assert_eq!(found_certs(), found);
     }
 
-    fn found_pkiobj_files() -> Vec<PathBuf> {
-        return vec![
+    #[test]
+    fn test_find_regex_certs() {
+        let found = find_certs(
+            PathBuf::from("test/search/"),
+            &CommonName::Pattern(Regex::new("local.*").unwrap()),
+            true,
+        );
+        assert_eq!(found_certs(), found)
+    }
+
+    fn found_pkiobj_files() -> HashSet<PathBuf> {
+        HashSet::from([
             PathBuf::from("test/search/bob.key"),
             PathBuf::from("test/search/alice.pem"),
-        ];
+        ])
     }
 
     #[test]
     fn test_find_pkiobj_files() {
-        let found = find_pkiobj_files(PathBuf::from("test/search"));
+        let found = HashSet::from_iter(find_pkiobj_files(PathBuf::from("test/search")).into_iter());
         assert_eq!(found_pkiobj_files(), found);
     }
 }

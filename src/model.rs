@@ -1,5 +1,6 @@
 use openssl::pkey::{PKey, Private};
 use openssl::x509::X509;
+use regex::Regex;
 use std::fmt::Display;
 use std::path::PathBuf;
 
@@ -19,14 +20,38 @@ impl Display for ParseError {
 
 // Model
 
+#[derive(Debug)]
+pub enum CommonName {
+    Literal(String),
+    Pattern(Regex),
+}
+
+impl Display for CommonName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Literal(string) => write!(f, "{string}"),
+            Self::Pattern(pattern) => write!(f, "{pattern}"),
+        }
+    }
+}
+
+impl CommonName {
+    pub fn matches(&self, cn: &str) -> bool {
+        match self {
+            Self::Literal(string) => string == cn,
+            Self::Pattern(pattern) => pattern.is_match(cn),
+        }
+    }
+}
+
 /// The action for the app to perform.
 #[derive(Debug)]
 pub enum Verb {
     /// Find certificates and their matching private keys.
-    Find { cn: String },
+    Find { cn: CommonName },
     /// Replace certificates, and optionally their private keys.
     Replace {
-        cn: String,
+        cn: CommonName,
         cert: Cert,
         privkey: Option<PrivKey>,
     },
@@ -35,7 +60,9 @@ pub enum Verb {
 impl Display for Verb {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         return match self {
-            Self::Find { cn } => write!(f, "Finding certificates and associated private keys with common name matching: {}", cn),
+            Self::Find { cn } => {
+                    write!(f, "Finding certificates and associated private keys with common name matching: {}", cn)
+            },
             Self::Replace {
                 cn,
                 cert: _,
@@ -50,9 +77,9 @@ impl Display for Verb {
 
 impl Verb {
     /// Returns the target common name.
-    pub fn cn(&self) -> &str {
+    pub fn cn(&self) -> &CommonName {
         match self {
-            Self::Find { cn } => cn,
+            Self::Find { cn } => &cn,
             Self::Replace {
                 cn,
                 cert: _,
@@ -64,7 +91,7 @@ impl Verb {
     /// Returns whether to also consider private keys.
     pub fn privkeys(&self) -> bool {
         match self {
-            Self::Find { cn: _ } => true,
+            Self::Find { .. } => true,
             Self::Replace {
                 cn: _,
                 cert: _,

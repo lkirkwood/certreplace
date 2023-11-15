@@ -3,6 +3,7 @@ mod parse;
 
 use model::*;
 use parse::*;
+use regex::Regex;
 use time::format_description::well_known::iso8601::EncodedConfig;
 
 use std::collections::HashMap;
@@ -18,29 +19,32 @@ use time::{
     OffsetDateTime,
 };
 
+/// The help text to display for the regex parameter.
+const REGEX_HELP: &str = "If provided, use regex matching with common name parameter.";
+
 /// The help text to display for the common name parameter.
-const COMMON_NAME_HELP: &'static str = "Subject common name to match in x509 certificates.";
+const COMMON_NAME_HELP: &str = "Subject common name to match in x509 certificates.";
 
 /// The help text to display for the certificate parameter.
-const CERTIFICATE_HELP: &'static str =
-    "Path to file containing certificate to use as a replacement. \
+const CERTIFICATE_HELP: &str = "Path to file containing certificate to use as a replacement. \
 If this file contains only one certificate, no common name needs to be provided.
 Will just find matching certs if not provided.";
 
 /// The help text to display for the private key parameter.
-const PRIVATE_KEY_HELP: &'static str =
-    "Path to file containing private key to use as a replacement. \
+const PRIVATE_KEY_HELP: &str = "Path to file containing private key to use as a replacement. \
 Private keys will not be replaced if this is not provided.";
 
 /// The help text to display for the force parameter.
-const FORCE_HELP: &'static str =
-    "If this is set the user will not be prompted to confirm the operation.";
+const FORCE_HELP: &str = "If this is set the user will not be prompted to confirm the operation.";
 
 /// Structopt cli struct.
 #[derive(StructOpt)]
 pub struct Cli {
     /// Path to search in.
     pub path: String,
+    /// Use regex matching on common name.
+    #[structopt(short = "e", help = REGEX_HELP)]
+    pub regex: bool,
     /// Common name to match in target certificates.
     #[structopt(short = "n", help = COMMON_NAME_HELP)]
     pub common_name: Option<String>,
@@ -67,21 +71,34 @@ fn main() {
                 Some(privkey_path) => Some(choose_privkey(privkey_path, &cert).unwrap()),
             };
             Verb::Replace {
-                cn: cert.common_name.clone(),
+                cn: CommonName::Literal(cert.common_name.clone()),
                 cert,
                 privkey,
             }
         }
         None => match args.common_name {
             None => panic!("No certificate or common name provided."),
-            Some(cn) => Verb::Find { cn },
+            Some(cn) => {
+                if args.regex {
+                    match Regex::new(&cn) {
+                        Ok(pattern) => Verb::Find {
+                            cn: CommonName::Pattern(pattern),
+                        },
+                        Err(err) => panic!("Invalid regular expression {cn}: {err}"),
+                    }
+                } else {
+                    Verb::Find {
+                        cn: CommonName::Literal(cn),
+                    }
+                }
+            }
         },
     };
 
     if args.force || confirm_action(&verb) {
         let paths = find_certs(PathBuf::from(args.path), verb.cn(), verb.privkeys());
         match verb {
-            Verb::Find { cn: _ } => print_pems(paths),
+            Verb::Find { .. } => print_pems(paths),
             Verb::Replace {
                 cn: _,
                 cert,
@@ -181,7 +198,7 @@ fn choose_privkey(path: &str, cert: &Cert) -> Result<PrivKey, ParseError> {
 /// Returns true if user confirms operation.
 fn confirm_action(verb: &Verb) -> bool {
     match verb {
-        Verb::Find { cn: _ } => {
+        Verb::Find { .. } => {
             println!("{verb}");
             return true;
         }
