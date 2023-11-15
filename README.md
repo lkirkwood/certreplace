@@ -1,28 +1,46 @@
 # certreplace
 
-A tool for replacing SSL certificates and their associated private keys.
+A tool for finding/replacing SSL certificates and their associated private keys.
 
 ## Usage
 
-`certreplace /path/to/search -n <string>`
+Certreplace will **always** back up files with time-stamped names if they will be modified.
+Unless the `-f, --force` parameter is used, certreplace will always confirm before modifying any files.
 
-Certreplace will, given a string, find all of the PEM encoded x509 certificates in the path provided
-with the same subject common name as the string. 
-Additionally, it will find all the PEM, DER or PKCS8 private keys that match at least one certificate.
+Certreplace can find certificates in two ways. If given a name (`-n, --name`) or regex pattern (`-e, --regex`), it will find x509 certificates with a Subject Common Name or Subject Alternative Name matching that value.
 
-`certreplace /path -n <string> --cert <path>`
+If given a path to a certificate file (`-c, --cert`) it will attempt to find other certificates matching the input cert using the following steps:
++ If there is only one public cert in the file, the common name and alternative names will be used. Similar to running with the `-n, --name` parameter.
++ If you *additionally* provide a path to a private key file (`-p, --priv`) with only one private key in it, the public cert in the input file matching the provided private key will be used to search. This lets you use cert files with multiple public certs as input.
 
-If you provide the path to a file containing only one certificate with the correct common name,
-all other certificates that are found will be replaced with the one found in the provided file.
-This does not affect the other data in the file.
+If you provided a public cert with `-c, --cert`, certreplace will attempt to replace any matching certs it finds with the input cert (after confirming each one).
+If you provided a private key with `-p, --priv`, certreplace will replace the private keys of matching certs aswell.
 
-`certreplace /path  --cert <path>`
+## Examples
 
-If you only provide the certificate path, and the file only contains one x509 certificate,
-the common name will be extracted and used to find certificates to replace.
+1. `certreplace /path/to/search --name <common name>`
 
-`certreplace /path [-n <string>] --cert <path> --priv <path>`
+This will find all certificates with a Subject Common Name or Subject Alternative Names value *exactly equal* to the `common name` parameter.
+Additionally, it will find private keys that match one of the certificates.
 
-If you provide a path to a file containing a single private key 
-that matches the given certificate's public key, any private keys found that match
-certificates about to be replaced will *also* be replaced.
+2. `certreplace /path/to/search --regex <regex pattern>`
+
+This will find all certificates with a Subject Common Name or Subject Alternative Names value *matching* the `regex pattern` parameter.
+Additionally, it will find private keys that match one of the certificates.
+
+3. `certreplace /path --name <common name> --cert <path>`
+
+Like example 1, but will replace matches with the input certificate.
+
+4. `certreplace /path --name <common name> --cert <path> --priv <path>`
+
+Like example 3, but will try to replace the private keys of matches with the input privkey.
+
+5. `certreplace /path --cert <path>`
+
+Like example 3, but will match based on the common/alternative names in the input certificate.
+
+6. `certreplace /path --cert <path> --priv <path>`
+
+Like example 4, but will match based on the input certificate like example 5.
+
