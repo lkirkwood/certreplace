@@ -20,10 +20,11 @@ use time::{
 };
 
 /// The help text to display for the regex parameter.
-const REGEX_HELP: &str = "If provided, use regex matching with common name parameter.";
+const REGEX_HELP: &str = "Rust regex pattern that subject name (common name or an alternative name) must match in x509 certificates.";
 
 /// The help text to display for the common name parameter.
-const COMMON_NAME_HELP: &str = "Subject common name to match in x509 certificates.";
+const COMMON_NAME_HELP: &str =
+    "Subject name (common name or an alternative name) that must be present in x509 certificates.";
 
 /// The help text to display for the certificate parameter.
 const CERTIFICATE_HELP: &str = "Path to file containing certificate to use as a replacement. \
@@ -42,17 +43,17 @@ const FORCE_HELP: &str = "If this is set the user will not be prompted to confir
 pub struct Cli {
     /// Path to search in.
     pub path: String,
-    /// Use regex matching on common name.
-    #[structopt(short = "e", help = REGEX_HELP)]
-    pub regex: bool,
-    /// Common name to match in target certificates.
-    #[structopt(short = "n", help = COMMON_NAME_HELP)]
-    pub common_name: Option<String>,
+    /// Rust regex pattern for common name to match.
+    #[structopt(short = "e", long = "regex", help = REGEX_HELP)]
+    pub regex: Option<String>,
+    /// Common or alternative name to match in target certificates.
+    #[structopt(short = "n", long = "name", help = COMMON_NAME_HELP)]
+    pub name: Option<String>,
     /// Path to file with x509 certificate to use as replacement.
-    #[structopt(long = "cert", help = CERTIFICATE_HELP)]
+    #[structopt(short = "c", long = "cert", help = CERTIFICATE_HELP)]
     pub certificate: Option<String>,
     /// Path to file with private key to use as replacement.
-    #[structopt(long = "priv", help = PRIVATE_KEY_HELP)]
+    #[structopt(short = "p", long = "priv", help = PRIVATE_KEY_HELP)]
     pub private_key: Option<String>,
     /// Whether to force the operation (don't prompt for confirmation)
     #[structopt(short = "f", long = "force", help = FORCE_HELP)]
@@ -63,9 +64,24 @@ pub struct Cli {
 fn main() {
     let args = Cli::from_args();
 
+    if args.regex.is_some() & args.name.is_some() {
+        panic!("Please only use one of regex (-e) and common name (-n) parameters.")
+    }
+
+    let cn = match args.name {
+        None => match args.regex {
+            None => None,
+            Some(pattern) => match Regex::new(&pattern) {
+                Ok(pattern) => Some(CommonName::Pattern(pattern)),
+                Err(err) => panic!("Invalid regular expression {pattern}: {err}"),
+            },
+        },
+        Some(cn) => Some(CommonName::Literal(cn)),
+    };
+
     let verb = match &args.certificate {
         Some(cert_path) => {
-            let cert = choose_cert(cert_path, args.common_name.as_ref()).unwrap();
+            let cert = choose_cert(cert_path, cn.as_ref()).unwrap();
             let privkey = match &args.private_key {
                 None => None,
                 Some(privkey_path) => Some(choose_privkey(privkey_path, &cert).unwrap()),
@@ -76,22 +92,9 @@ fn main() {
                 privkey,
             }
         }
-        None => match args.common_name {
-            None => panic!("No certificate or common name provided."),
-            Some(cn) => {
-                if args.regex {
-                    match Regex::new(&cn) {
-                        Ok(pattern) => Verb::Find {
-                            cn: CommonName::Pattern(pattern),
-                        },
-                        Err(err) => panic!("Invalid regular expression {cn}: {err}"),
-                    }
-                } else {
-                    Verb::Find {
-                        cn: CommonName::Literal(cn),
-                    }
-                }
-            }
+        None => match cn {
+            Some(cn) => Verb::Find { cn },
+            None => panic!("Must provide one of name, regex, or certificate to use for search."),
         },
     };
 
@@ -115,7 +118,7 @@ fn main() {
 
 /// Chooses a certificate matching a common name from a file of pki objs,
 /// or returns an error if there is no unique match.
-fn choose_cert(path: &str, cn: Option<&String>) -> Result<Cert, ParseError> {
+fn choose_cert(path: &str, cn: Option<&CommonName>) -> Result<Cert, ParseError> {
     let path = PathBuf::from(path);
     let pkis = parse_pkiobjs(PathBuf::from(path)).unwrap();
 
@@ -140,7 +143,7 @@ fn choose_cert(path: &str, cn: Option<&String>) -> Result<Cert, ParseError> {
         for pki in pkis {
             match pki {
                 PKIObject::Cert(cert) => {
-                    if &cert.common_name == cn {
+                    if cn.matches(&cert.common_name) {
                         certs.push(cert);
                     }
                 }
