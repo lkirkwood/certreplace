@@ -6,6 +6,7 @@ use parse::*;
 use regex::Regex;
 use time::format_description::well_known::iso8601::EncodedConfig;
 
+use clap::Parser;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -13,7 +14,6 @@ use std::{
     io::{self, Write},
     str,
 };
-use structopt::StructOpt;
 use time::{
     format_description::well_known::iso8601::{Config, Iso8601},
     OffsetDateTime,
@@ -39,30 +39,30 @@ Private keys will not be replaced if this is not provided.";
 const FORCE_HELP: &str = "If this is set the user will not be prompted to confirm the operation.";
 
 /// Structopt cli struct.
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub struct Cli {
     /// Path to search in.
     pub path: String,
     /// Rust regex pattern for common name to match.
-    #[structopt(short = "e", long = "regex", help = REGEX_HELP)]
+    #[arg(short = 'e', long = "regex", help = REGEX_HELP)]
     pub regex: Option<String>,
     /// Common or alternative name to match in target certificates.
-    #[structopt(short = "n", long = "name", help = COMMON_NAME_HELP)]
+    #[arg(short = 'n', long = "name", help = COMMON_NAME_HELP)]
     pub name: Option<String>,
     /// Path to file with x509 certificate to use as replacement.
-    #[structopt(short = "c", long = "cert", help = CERTIFICATE_HELP)]
+    #[arg(short = 'c', long = "cert", help = CERTIFICATE_HELP)]
     pub certificate: Option<String>,
     /// Path to file with private key to use as replacement.
-    #[structopt(short = "p", long = "priv", help = PRIVATE_KEY_HELP)]
+    #[arg(short = 'p', long = "priv", help = PRIVATE_KEY_HELP)]
     pub private_key: Option<String>,
     /// Whether to force the operation (don't prompt for confirmation)
-    #[structopt(short = "f", long = "force", help = FORCE_HELP)]
+    #[arg(short = 'f', long = "force", help = FORCE_HELP)]
     pub force: bool,
 }
 
 /// Main loop of the app.
 fn main() {
-    let args = Cli::from_args();
+    let args = Cli::parse();
 
     if args.regex.is_some() & args.name.is_some() {
         panic!("Please only use one of regex (-e) and common name (-n) parameters.")
