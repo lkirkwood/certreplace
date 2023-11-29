@@ -118,18 +118,20 @@ pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
                         },
                     }));
                 } else if let Some(cert) = parse_cert(part.data) {
-                    if let Some(common_name) = get_cn(&cert) {
-                        pkiobjs.push(PKIObject::Cert(Cert {
-                            cert,
-                            common_name,
-                            locator: PEMLocator {
-                                kind: PEMKind::Cert,
-                                path: path.clone(),
-                                start: part.start,
-                                end: part.start + part.data.len(),
-                            },
-                        }));
-                    }
+                    let common_names = get_common_names(&cert);
+                    let alt_names = get_alt_names(&cert);
+
+                    pkiobjs.push(PKIObject::Cert(Cert {
+                        cert,
+                        common_names,
+                        alt_names,
+                        locator: PEMLocator {
+                            kind: PEMKind::Cert,
+                            path: path.clone(),
+                            start: part.start,
+                            end: part.start + part.data.len(),
+                        },
+                    }));
                 }
             }
         }
@@ -212,14 +214,31 @@ pub fn match_privkeys(
     }
 }
 
-/// Gets the common name from a certificate if possible.
-pub fn get_cn(cert: &X509) -> Option<String> {
-    if let Some(data) = cert.subject_name().entries_by_nid(Nid::COMMONNAME).next() {
-        if let Ok(string) = data.data().as_utf8() {
-            return Some(string.to_string());
-        }
+/// Gets the common names from a certificate.
+pub fn get_common_names(cert: &X509) -> Vec<String> {
+    cert.subject_name()
+        .entries_by_nid(Nid::COMMONNAME)
+        .into_iter()
+        .filter_map(|e| e.data().as_utf8().ok())
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// Gets the alternative names from a certificate.
+pub fn get_alt_names(cert: &X509) -> Vec<String> {
+    if let Some(data) = cert.subject_alt_names() {
+        data.into_iter()
+            .filter_map(|name| {
+                if let Some(s) = name.dnsname() {
+                    Some(s.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    } else {
+        vec![]
     }
-    return None;
 }
 
 #[cfg(test)]

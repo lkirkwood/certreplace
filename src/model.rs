@@ -36,10 +36,10 @@ impl Display for CommonName {
 }
 
 impl CommonName {
-    pub fn matches(&self, cn: &str) -> bool {
+    pub fn matches(&self, string: &str) -> bool {
         match self {
-            Self::Literal(string) => string == cn,
-            Self::Pattern(pattern) => pattern.is_match(cn),
+            Self::Literal(string) => string == string,
+            Self::Pattern(pattern) => pattern.is_match(string),
         }
     }
 }
@@ -107,8 +107,19 @@ impl Verb {
 #[derive(Debug, Clone)]
 pub struct Cert {
     pub cert: X509,
-    pub common_name: String,
+    pub common_names: Vec<String>,
+    pub alt_names: Vec<String>,
     pub locator: PEMLocator,
+}
+
+impl Cert {
+    pub fn names(&self) -> Vec<&str> {
+        self.common_names
+            .iter()
+            .map(|s| s.as_str())
+            .chain(self.alt_names.iter().map(|s| s.as_str()))
+            .collect()
+    }
 }
 
 /// An X509 certificate private key.
