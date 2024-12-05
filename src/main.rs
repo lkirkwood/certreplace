@@ -324,11 +324,6 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
             continue;
         }
 
-        if let Err(err) = backup_file(&path, &now) {
-            error!("Failed to backup file at {path:#?}: {err}");
-            continue;
-        }
-
         let mut content = match fs::read(&path) {
             Err(err) => {
                 error!("Failed to read file marked for modification at {path:#?}: {err}");
@@ -361,6 +356,11 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
         }
 
         if changed {
+            if let Err(err) = backup_file(&path, &now) {
+                error!("Failed to backup file at {path:#?}: {err}");
+                continue;
+            }
+
             info!("Replacing PEMs in {path:#?}");
             if let Err(err) = fs::write(path, content) {
                 error!("Error writing: {err}")
