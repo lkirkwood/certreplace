@@ -317,6 +317,7 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
             exit(1);
         }
     };
+    let mut any_changed = false;
 
     for (path, pems) in pems_by_path(targets) {
         if (path == cert.locator.path) | (path == pkey_path) {
@@ -338,6 +339,7 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
 
         // pems always read in order, so offset can be scalar.
         let mut offset: isize = 0;
+        let mut changed = false;
         for locator in pems {
             let pem = match locator.kind {
                 PEMKind::Cert => &cert_pem,
@@ -350,14 +352,25 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
                 0.max(target_end + offset) as usize,
             );
 
+            if &content[start..=end] != pem {
+                changed = true;
+            }
+
             content = [&content[..start], pem, &content[end..]].concat();
             offset += pem.len() as isize - (target_end - target_start);
         }
 
-        println!("Replacing PEMs in {:?}", &path);
-        if let Err(err) = fs::write(path, content) {
-            println!("Error writing: {:?}", err)
-        };
+        if changed {
+            info!("Replacing PEMs in {path:#?}");
+            if let Err(err) = fs::write(path, content) {
+                error!("Error writing: {err}")
+            };
+            any_changed = true;
+        }
+    }
+
+    if !any_changed {
+        info!("Did not change any files.")
     }
 }
 
