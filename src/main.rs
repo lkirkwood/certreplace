@@ -6,9 +6,11 @@ use parse::*;
 use regex::Regex;
 use time::format_description::well_known::iso8601::EncodedConfig;
 
+use paris::{error, info};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::process::exit;
 use std::{
     io::{self, Write},
     str,
@@ -19,7 +21,7 @@ use time::{
     OffsetDateTime,
 };
 
-/// The help text to display for the regex parameter.
+/// The help text to error for the regex parameter.
 const REGEX_HELP: &str = "Rust regex pattern that subject name (common name or an alternative name) must match in x509 certificates.";
 
 /// The help text to display for the common name parameter.
@@ -65,7 +67,8 @@ fn main() {
     let args = Cli::from_args();
 
     if args.regex.is_some() & args.name.is_some() {
-        panic!("Please only use one of regex (-e) and common name (-n) parameters.")
+        error!("Please only use one of regex (-e) and common name (-n) parameters.");
+        exit(1);
     }
 
     let cn = match args.name {
@@ -73,7 +76,10 @@ fn main() {
             None => None,
             Some(pattern) => match Regex::new(&pattern) {
                 Ok(pattern) => Some(CommonName::Pattern(pattern)),
-                Err(err) => panic!("Invalid regular expression {pattern}: {err}"),
+                Err(err) => {
+                    error!("Invalid regular expression {pattern}: {err}");
+                    exit(1);
+                }
             },
         },
         Some(cn) => Some(CommonName::Literal(cn)),
@@ -81,11 +87,19 @@ fn main() {
 
     let verb = match &args.certificate {
         Some(cert_path) => {
-            let cert = choose_cert(cert_path, cn.as_ref()).unwrap();
+            let cert = match choose_cert(cert_path, cn.as_ref()) {
+                Ok(cert) => cert,
+                Err(err) => {
+                    error!("{err}");
+                    exit(1);
+                }
+            };
+
             let privkey = match &args.private_key {
                 None => None,
                 Some(privkey_path) => Some(choose_privkey(privkey_path, &cert).unwrap()),
             };
+
             Verb::Replace {
                 cn: CommonName::Literal(cert.common_name.clone()),
                 cert,
@@ -94,7 +108,10 @@ fn main() {
         }
         None => match cn {
             Some(cn) => Verb::Find { cn },
-            None => panic!("Must provide one of name, regex, or certificate to use for search."),
+            None => {
+                error!("Must provide one of name, regex, or certificate to use for search.");
+                exit(1);
+            }
         },
     };
 
@@ -109,10 +126,11 @@ fn main() {
             } => replace_pems(paths, cert, privkey),
         }
     } else {
-        panic!(
+        error!(
             "User declined to replace objects for common name: {}",
             verb.cn()
         );
+        exit(1);
     }
 }
 
@@ -133,7 +151,7 @@ fn choose_cert(path: &str, cn: Option<&CommonName>) -> Result<Cert, ParseError> 
             return Ok(certs.pop().unwrap());
         } else {
             return Err(ParseError {
-                msg: "Certificate file does not contain exactly one certificate, so a common name must be provided.".to_string() 
+                msg: "Replacement file does not contain exactly one certificate, so a common name must be provided.".to_string()
             });
         }
     } else {
@@ -154,7 +172,7 @@ fn choose_cert(path: &str, cn: Option<&CommonName>) -> Result<Cert, ParseError> 
             return Ok(certs.pop().unwrap());
         } else {
             return Err(ParseError {
-                msg: format!("Certificate file does not contain exactly one certificate with common name: {}", cn)
+                msg: format!("Replacement file does not contain exactly one certificate with common name matching \"{cn}\"")
             });
         }
     }
@@ -191,7 +209,7 @@ fn choose_privkey(path: &str, cert: &Cert) -> Result<PrivKey, ParseError> {
     } else {
         return Err(ParseError {
             msg: format!(
-                "Failed to get public key from provided certificate, cn: {}",
+                "Failed to get public key from provided certificate with common name matching \"{}\"",
                 cert.common_name
             ),
         });
@@ -202,7 +220,7 @@ fn choose_privkey(path: &str, cert: &Cert) -> Result<PrivKey, ParseError> {
 fn confirm_action(verb: &Verb) -> bool {
     match verb {
         Verb::Find { .. } => {
-            println!("{verb}");
+            info!("{verb}");
             return true;
         }
         Verb::Replace {
@@ -210,10 +228,10 @@ fn confirm_action(verb: &Verb) -> bool {
             cert,
             privkey,
         } => {
-            println!("{verb}");
-            println!("Replacement certificate: {:?}", cert.locator.path);
+            info!("{verb}");
+            info!("Replacement certificate: {:?}", cert.locator.path);
             if let Some(privkey) = privkey {
-                println!("Replacement private key: {:?}", privkey.locator.path);
+                info!("Replacement private key: {:?}", privkey.locator.path);
             }
             print!("Okay? (y/n) ");
             io::stdout()
@@ -230,13 +248,16 @@ fn confirm_action(verb: &Verb) -> bool {
 
 /// Prints the locations of pems.
 fn print_pems(pems: Vec<PEMLocator>) {
-    println!("\nMatching certificates:");
+    println!();
+    info!("Matching certificates:");
     for cert in &pems {
         if cert.kind == PEMKind::Cert {
             println!("\t{:#?}", cert.path);
         }
     }
-    println!("\nMatching private keys:");
+
+    println!();
+    info!("Matching private keys:");
     for key in &pems {
         if key.kind == PEMKind::PrivKey {
             println!("\t{:#?}", key.path);
@@ -270,13 +291,19 @@ const DATETIME_FORMAT_CONFIG: EncodedConfig = Config::DEFAULT
 fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) {
     let cert_pem = match cert.cert.to_pem() {
         Ok(pem) => pem,
-        Err(err) => panic!("Failed to convert new certificate to PEM: {:?}", err),
+        Err(err) => {
+            error!("Failed to convert new certificate to PEM: {:?}", err);
+            exit(1);
+        }
     };
 
     let (pkey_pem, pkey_path) = if let Some(privkey) = privkey {
         match privkey.key.private_key_to_pem_pkcs8() {
             Ok(pem) => (pem, privkey.locator.path),
-            Err(err) => panic!("Failed to convert new private key to PEM: {:?}", err),
+            Err(err) => {
+                error!("Failed to convert new private key to PEM: {err}");
+                exit(1);
+            }
         }
     } else {
         (vec![], PathBuf::new())
@@ -285,22 +312,25 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
     let now = match OffsetDateTime::now_utc().format(&(Iso8601 as Iso8601<DATETIME_FORMAT_CONFIG>))
     {
         Ok(datetime) => datetime,
-        Err(err) => panic!("Failed to format datetime: {err:?}"),
+        Err(err) => {
+            error!("Failed to format datetime: {err}");
+            exit(1);
+        }
     };
+
     for (path, pems) in pems_by_path(targets) {
         if (path == cert.locator.path) | (path == pkey_path) {
             continue;
         }
+
         if let Err(err) = backup_file(&path, &now) {
-            println!("Failed to backup file at {:#?}: {:#?}", path, err);
+            error!("Failed to backup file at {path:#?}: {err}");
             continue;
         }
+
         let mut content = match fs::read(&path) {
             Err(err) => {
-                println!(
-                    "Failed to read file marked for modification at {:?}: {:?}",
-                    path, err
-                );
+                error!("Failed to read file marked for modification at {path:#?}: {err}");
                 return;
             }
             Ok(bytes) => bytes,
@@ -313,11 +343,13 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
                 PEMKind::Cert => &cert_pem,
                 PEMKind::PrivKey => &pkey_pem,
             };
+
             let (target_start, target_end) = (locator.start as isize, locator.end as isize);
             let (start, end) = (
                 0.max(target_start + offset) as usize,
                 0.max(target_end + offset) as usize,
             );
+
             content = [&content[..start], pem, &content[end..]].concat();
             offset += pem.len() as isize - (target_end - target_start);
         }

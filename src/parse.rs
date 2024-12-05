@@ -3,6 +3,7 @@ use jwalk::WalkDir;
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Private};
 use openssl::x509::X509;
+use paris::error;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::{fs, str};
@@ -16,7 +17,7 @@ pub fn find_certs(path: PathBuf, cn: &CommonName, privkeys: bool) -> Vec<PEMLoca
     let mut keys = Vec::new();
     for path in find_pkiobj_files(path) {
         match parse_pkiobjs(path) {
-            Err(err) => println!("{:?}", err),
+            Err(err) => error!("{:?}", err),
             Ok(pkiobjs) => {
                 for pkiobj in pkiobjs {
                     match pkiobj {
@@ -42,7 +43,7 @@ pub fn find_certs(path: PathBuf, cn: &CommonName, privkeys: bool) -> Vec<PEMLoca
                         keys = unmatched;
                     }
                     Err((err, unmatched)) => {
-                        println!("Error on cert at {:?}: {:?}", cert.locator, err);
+                        error!("Error on cert at {:?}: {:?}", cert.locator, err);
                         keys = unmatched;
                     }
                 }

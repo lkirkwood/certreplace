@@ -11,7 +11,9 @@ use std::path::PathBuf;
 pub struct ParseError {
     pub msg: String,
 }
+
 impl std::error::Error for ParseError {}
+
 impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Failed to parse certificate: {}", self.msg)
