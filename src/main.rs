@@ -40,7 +40,6 @@ Private keys will not be replaced if this is not provided.";
 /// The help text to display for the force parameter.
 const FORCE_HELP: &str = "If this is set the user will not be prompted to confirm the operation.";
 
-/// Structopt cli struct.
 #[derive(Parser)]
 pub struct Cli {
     /// Path to search in.
