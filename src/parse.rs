@@ -37,66 +37,66 @@ pub fn find_certs(path: PathBuf, cn: &CommonName, privkeys: bool) -> Vec<PEMLoca
     for cert in certs {
         if cn.matches(&cert.common_name) {
             if privkeys {
-                match match_privkeys(&cert.cert, keys) {
-                    Ok((matched, unmatched)) => {
-                        pems.extend(matched.into_iter().map(|k| k.locator));
-                        keys = unmatched;
+                if let Ok(pubkey) = cert.cert.public_key() {
+                    // TODO use extract_if once stabilised
+                    // https://github.com/rust-lang/rust/issues/43244
+                    let mut _keys = vec![];
+                    for key in keys {
+                        if key.key.public_eq(&pubkey) {
+                            pems.push(key.locator);
+                        } else {
+                            _keys.push(key);
+                        }
                     }
-                    Err((err, unmatched)) => {
-                        error!("Error on cert at {:?}: {:?}", cert.locator, err);
-                        keys = unmatched;
-                    }
+                    keys = _keys;
+                } else {
+                    error!("Failed to read public key from X509: {cert:?}");
                 }
             }
             pems.push(cert.locator);
         }
     }
 
-    return pems;
+    pems
 }
 
 /// Finds files with pem/crt/key/cer/der extensions in the provided path.
 pub fn find_pkiobj_files(path: PathBuf) -> Vec<PathBuf> {
     let mut paths = vec![];
-    for read in WalkDir::new(path).into_iter() {
-        if let Ok(file) = read {
-            if let Some(name) = file.file_name.to_str() {
-                if let Some((_, ext)) = name.rsplit_once('.') {
-                    match ext {
-                        "pem" | "crt" | "key" | "cer" | "der" => paths.push(file.path()),
-                        _ => {}
-                    }
-                }
+    for file in WalkDir::new(path).into_iter().flatten() {
+        if let Some(name) = file.file_name.to_str() {
+            if let Some((_, "pem" | "crt" | "key" | "cer" | "der")) = name.rsplit_once('.') {
+                paths.push(file.path());
             }
         }
     }
-    return paths;
+    paths
 }
 
 // Parsing
 
 /// Parses a private key from some bytes.
 pub fn parse_privkey(content: &[u8]) -> Option<PKey<Private>> {
-    if let Ok(pkey) = PKey::private_key_from_pem_passphrase(&content, &[]) {
+    if let Ok(pkey) = PKey::private_key_from_pem_passphrase(content, &[]) {
+        Some(pkey)
+    } else if let Ok(pkey) = PKey::private_key_from_der(content) {
         return Some(pkey);
-    } else if let Ok(pkey) = PKey::private_key_from_der(&content) {
-        return Some(pkey);
-    } else if let Ok(pkey) = PKey::private_key_from_pkcs8(&content) {
+    } else if let Ok(pkey) = PKey::private_key_from_pkcs8(content) {
         return Some(pkey);
     } else {
         return None;
-    };
+    }
 }
 
 /// Parses a certificate from some bytes.
 pub fn parse_cert(content: &[u8]) -> Option<X509> {
-    return if let Ok(cert) = X509::from_pem(&content) {
+    if let Ok(cert) = X509::from_pem(content) {
         Some(cert)
-    } else if let Ok(cert) = X509::from_der(&content) {
+    } else if let Ok(cert) = X509::from_der(content) {
         Some(cert)
     } else {
         None
-    };
+    }
 }
 
 /// PEM labels for objects we dont care about.
@@ -135,7 +135,7 @@ pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
             }
         }
     };
-    return Ok(pkiobjs);
+    Ok(pkiobjs)
 }
 
 /// The chars at the beginning or end of a PEM boundary.
@@ -148,7 +148,7 @@ const PEM_END: [char; 5] = ['-', 'E', 'N', 'D', ' '];
 const LABEL_TRIM: [char; 2] = ['-', ' '];
 
 /// Parses the data into PEM parts.
-pub fn get_pem_parts<'a>(data: &'a [u8]) -> Result<Vec<PEMPart<'a>>, ParseError> {
+pub fn get_pem_parts(data: &[u8]) -> Result<Vec<PEMPart<'_>>, ParseError> {
     let mut parts = Vec::new();
 
     let mut in_boundary = false;
@@ -190,28 +190,10 @@ pub fn get_pem_parts<'a>(data: &'a [u8]) -> Result<Vec<PEMPart<'a>>, ParseError>
             label.push(char);
         }
     }
-    return Ok(parts);
+    Ok(parts)
 }
 
 // Utils
-
-/// Splits the keys into those that match the certificate (left) and those that dont (right).
-/// Upon error all keys are returned with the error.
-pub fn match_privkeys(
-    cert: &X509,
-    keys: Vec<PrivKey>,
-) -> Result<(Vec<PrivKey>, Vec<PrivKey>), (ParseError, Vec<PrivKey>)> {
-    if let Ok(pubkey) = cert.public_key() {
-        return Ok(keys.into_iter().partition(|key| key.key.public_eq(&pubkey)));
-    } else {
-        return Err((
-            ParseError {
-                msg: format!("Failed to read public key from X509: {:?}", cert),
-            },
-            keys,
-        ));
-    }
-}
 
 /// Gets the common name from a certificate if possible.
 pub fn get_cn(cert: &X509) -> Option<String> {
@@ -220,7 +202,7 @@ pub fn get_cn(cert: &X509) -> Option<String> {
             return Some(string.to_string());
         }
     }
-    return None;
+    None
 }
 
 #[cfg(test)]
@@ -234,7 +216,7 @@ mod tests {
     use super::{find_certs, find_pkiobj_files};
 
     fn found_certs() -> Vec<PEMLocator> {
-        return vec![
+        vec![
             PEMLocator {
                 start: 0,
                 end: 3322,
@@ -247,7 +229,7 @@ mod tests {
                 kind: PEMKind::Cert,
                 path: PathBuf::from("test/search/alice.pem"),
             },
-        ];
+        ]
     }
 
     #[test]
@@ -279,7 +261,7 @@ mod tests {
 
     #[test]
     fn test_find_pkiobj_files() {
-        let found = HashSet::from_iter(find_pkiobj_files(PathBuf::from("test/search")).into_iter());
+        let found = HashSet::from_iter(find_pkiobj_files(PathBuf::from("test/search")));
         assert_eq!(found_pkiobj_files(), found);
     }
 }

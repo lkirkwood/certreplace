@@ -95,10 +95,7 @@ fn main() {
                 }
             };
 
-            let privkey = match &args.private_key {
-                None => None,
-                Some(privkey_path) => Some(choose_privkey(privkey_path, &cert).unwrap()),
-            };
+            let privkey = args.private_key.as_ref().map(|privkey_path| choose_privkey(privkey_path, &cert).unwrap());
 
             Verb::Replace {
                 cn: CommonName::Literal(cert.common_name.clone()),
@@ -138,7 +135,7 @@ fn main() {
 /// or returns an error if there is no unique match.
 fn choose_cert(path: &str, cn: Option<&CommonName>) -> Result<Cert, ParseError> {
     let path = PathBuf::from(path);
-    let pkis = parse_pkiobjs(PathBuf::from(path)).unwrap();
+    let pkis = parse_pkiobjs(path).unwrap();
 
     if cn.is_none() {
         let mut certs = Vec::new();
@@ -148,11 +145,11 @@ fn choose_cert(path: &str, cn: Option<&CommonName>) -> Result<Cert, ParseError> 
             }
         }
         if certs.len() == 1 {
-            return Ok(certs.pop().unwrap());
+            Ok(certs.pop().unwrap())
         } else {
-            return Err(ParseError {
+            Err(ParseError {
                 msg: "Replacement file does not contain exactly one certificate, so a common name must be provided.".to_string()
-            });
+            })
         }
     } else {
         let cn = cn.unwrap();
@@ -169,11 +166,11 @@ fn choose_cert(path: &str, cn: Option<&CommonName>) -> Result<Cert, ParseError> 
             }
         }
         if certs.len() == 1 {
-            return Ok(certs.pop().unwrap());
+            Ok(certs.pop().unwrap())
         } else {
-            return Err(ParseError {
+            Err(ParseError {
                 msg: format!("Replacement file does not contain exactly one certificate with common name matching \"{cn}\"")
-            });
+            })
         }
     }
 }
@@ -183,7 +180,7 @@ fn choose_cert(path: &str, cn: Option<&CommonName>) -> Result<Cert, ParseError> 
 fn choose_privkey(path: &str, cert: &Cert) -> Result<PrivKey, ParseError> {
     if let Ok(pubkey) = cert.cert.public_key() {
         let path = PathBuf::from(path);
-        let pkis = parse_pkiobjs(PathBuf::from(path)).unwrap();
+        let pkis = parse_pkiobjs(path).unwrap();
         let mut privkeys = Vec::new();
 
         for pki in pkis {
@@ -197,22 +194,22 @@ fn choose_privkey(path: &str, cert: &Cert) -> Result<PrivKey, ParseError> {
             }
         }
         if privkeys.len() == 1 {
-            return Ok(privkeys.pop().unwrap());
+            Ok(privkeys.pop().unwrap())
         } else {
-            return Err(ParseError {
+            Err(ParseError {
                 msg: format!(
                 "Provided file does not contain exactly one private key match cert with common name: {}",
                 cert.common_name
             ),
-            });
+            })
         }
     } else {
-        return Err(ParseError {
+        Err(ParseError {
             msg: format!(
                 "Failed to get public key from provided certificate with common name matching \"{}\"",
                 cert.common_name
             ),
-        });
+        })
     }
 }
 
@@ -221,7 +218,7 @@ fn confirm_action(verb: &Verb) -> bool {
     match verb {
         Verb::Find { .. } => {
             info!("{verb}");
-            return true;
+            true
         }
         Verb::Replace {
             cn: _,
@@ -241,7 +238,7 @@ fn confirm_action(verb: &Verb) -> bool {
             io::stdin()
                 .read_line(&mut input)
                 .expect("Failed to read user confirmation for target common name.");
-            return input.to_lowercase().starts_with("y");
+            input.to_lowercase().starts_with("y")
         }
     }
 }
@@ -274,7 +271,7 @@ fn pems_by_path(pems: Vec<PEMLocator>) -> HashMap<PathBuf, Vec<PEMLocator>> {
         }
         map.get_mut(&pem.path).unwrap().push(pem);
     }
-    return map;
+    map
 }
 
 /// Configures the format of the Iso8601 datetime.
@@ -363,7 +360,7 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
 
             info!("Replacing PEMs in {path:#?}");
             if let Err(err) = fs::write(path, content) {
-                error!("Error writing: {err}")
+                error!("Error writing: {err}");
             };
             any_changed = true;
         }
@@ -383,5 +380,5 @@ fn backup_file(path: &PathBuf, datetime: &str) -> Result<(), io::Error> {
     let mut bkp_path = path.clone();
     bkp_path.set_extension(format!("{ext}.{datetime}.bkp",));
     fs::copy(path, bkp_path)?;
-    return Ok(());
+    Ok(())
 }

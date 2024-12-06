@@ -61,7 +61,7 @@ pub enum Verb {
 
 impl Display for Verb {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        return match self {
+        match self {
             Self::Find { cn } => {
                     write!(f, "Finding certificates and associated private keys with common name matching: {}", cn)
             },
@@ -73,7 +73,7 @@ impl Display for Verb {
                 true => write!(f, "Replacing certificates and associated private keys with common name matching: {}", cn),
                 false => write!(f, "Replacing certificates only with common name matching: {}", cn),
             },
-        };
+        }
     }
 }
 
@@ -81,7 +81,7 @@ impl Verb {
     /// Returns the target common name.
     pub fn cn(&self) -> &CommonName {
         match self {
-            Self::Find { cn } => &cn,
+            Self::Find { cn } => cn,
             Self::Replace {
                 cn,
                 cert: _,
