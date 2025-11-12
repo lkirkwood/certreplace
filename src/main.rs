@@ -7,8 +7,8 @@ use replace::replace_pems;
 use search::{choose_cert, choose_privkey};
 
 use model::{CommonName, PEMKind, PEMLocator, Verb};
-use parse::find_certs;
 use regex::Regex;
+use search::find_certs;
 
 use clap::Parser;
 use paris::{error, info};

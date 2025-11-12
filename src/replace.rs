@@ -141,7 +141,10 @@ fn pems_by_path(pems: Vec<PEMLocator>) -> HashMap<PathBuf, Vec<PEMLocator>> {
 mod tests {
     use std::str::FromStr;
 
-    use crate::{model::CommonName, parse::find_certs, search::choose_cert};
+    use crate::{
+        model::CommonName,
+        search::{choose_cert, find_certs},
+    };
 
     use super::*;
 
