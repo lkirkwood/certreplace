@@ -86,6 +86,13 @@ impl Verb {
     }
 }
 
+#[allow(dead_code)]
+/// A pair of paths that describe a replacement operation.
+pub struct Replacement {
+    pub backup: PathBuf,
+    pub modified: PathBuf,
+}
+
 // PKI Objects
 
 /// An X509 certificate.
