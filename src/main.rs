@@ -250,7 +250,7 @@ fn print_pems(pems: &[PEMLocator]) {
     info!("Matching certificates:");
     for cert in pems {
         if cert.kind == PEMKind::Cert {
-            println!("\t{:#?}", cert.path.display());
+            println!("\t{}", cert.path.display());
         }
     }
 
