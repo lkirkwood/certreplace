@@ -2,8 +2,8 @@ mod model;
 mod parse;
 
 use anyhow::{bail, Result};
-use model::*;
-use parse::*;
+use model::{Cert, CommonName, PEMKind, PEMLocator, PKIObject, PrivKey, Verb};
+use parse::{find_certs, parse_pkiobjs};
 use regex::Regex;
 use time::format_description::well_known::iso8601::EncodedConfig;
 
@@ -106,24 +106,25 @@ fn main() {
                 privkey,
             }
         }
-        None => match common_name {
-            Some(common_name) => Verb::Find { name: common_name },
-            None => {
+        None => {
+            if let Some(common_name) = common_name {
+                Verb::Find { name: common_name }
+            } else {
                 error!("Must provide one of name, regex, or certificate to use for search.");
                 exit(1);
             }
-        },
+        }
     };
 
     if args.force || confirm_action(&verb) {
-        let paths = find_certs(PathBuf::from(args.path), verb.name(), verb.privkeys());
+        let paths = find_certs(&PathBuf::from(args.path), verb.name(), verb.privkeys());
         match verb {
-            Verb::Find { .. } => print_pems(paths),
+            Verb::Find { .. } => print_pems(&paths),
             Verb::Replace {
                 name: _,
                 cert,
                 privkey,
-            } => replace_pems(paths, cert, privkey),
+            } => replace_pems(paths, &cert, privkey),
         }
     } else {
         error!(
@@ -138,27 +139,9 @@ fn main() {
 /// or returns an error if there is no unique match.
 fn choose_cert(path: &str, name: Option<&CommonName>) -> Result<Cert> {
     let path = PathBuf::from(path);
-    let pkis = parse_pkiobjs(path).unwrap();
+    let pkis = parse_pkiobjs(&path).unwrap();
 
-    if name.is_none() {
-        let mut certs = Vec::new();
-        for pki in pkis {
-            if let PKIObject::Cert(cert) = pki {
-                certs.push(cert);
-            }
-        }
-
-        if certs.len() == 1 {
-            Ok(certs.pop().unwrap())
-        } else {
-            bail!(
-                "Replacement file does not contain exactly one certificate, \
-                so a common name must be provided."
-            )
-        }
-    } else {
-        let name = name.unwrap();
-
+    if let Some(name) = name {
         let mut certs = Vec::new();
         for pki in pkis {
             match pki {
@@ -178,15 +161,31 @@ fn choose_cert(path: &str, name: Option<&CommonName>) -> Result<Cert> {
                 with common name matching \"{name}\""
             )
         }
+    } else {
+        let mut certs = Vec::new();
+        for pki in pkis {
+            if let PKIObject::Cert(cert) = pki {
+                certs.push(cert);
+            }
+        }
+
+        if certs.len() == 1 {
+            Ok(certs.pop().unwrap())
+        } else {
+            bail!(
+                "Replacement file does not contain exactly one certificate, \
+                so a common name must be provided."
+            )
+        }
     }
 }
 
 /// Chooses a private key matching a cert from a file of pki objs,
 /// or returns an error if there is no unique match.
 fn choose_privkey(path: &str, cert: &Cert) -> Result<PrivKey> {
-    if let Ok(pubkey) = cert.cert.public_key() {
+    if let Ok(pubkey) = cert.content.public_key() {
         let path = PathBuf::from(path);
-        let pkis = parse_pkiobjs(path).unwrap();
+        let pkis = parse_pkiobjs(&path).unwrap();
         let mut privkeys = Vec::new();
 
         for pki in pkis {
@@ -240,26 +239,26 @@ fn confirm_action(verb: &Verb) -> bool {
             io::stdin()
                 .read_line(&mut input)
                 .expect("Failed to read user confirmation for target common name.");
-            input.to_lowercase().starts_with("y")
+            input.to_lowercase().starts_with('y')
         }
     }
 }
 
 /// Prints the locations of pems.
-fn print_pems(pems: Vec<PEMLocator>) {
+fn print_pems(pems: &[PEMLocator]) {
     println!();
     info!("Matching certificates:");
-    for cert in &pems {
+    for cert in pems {
         if cert.kind == PEMKind::Cert {
-            println!("\t{:#?}", cert.path);
+            println!("\t{:#?}", cert.path.display());
         }
     }
 
     println!();
     info!("Matching private keys:");
-    for key in &pems {
+    for key in pems {
         if key.kind == PEMKind::PrivKey {
-            println!("\t{:#?}", key.path);
+            println!("\t{}", key.path.display());
         }
     }
 }
@@ -287,8 +286,8 @@ const DATETIME_FORMAT_CONFIG: EncodedConfig = Config::DEFAULT
     .encode();
 
 /// Replaces the target pems with the new data.
-fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) {
-    let cert_pem = match cert.cert.to_pem() {
+fn replace_pems(targets: Vec<PEMLocator>, cert: &Cert, privkey: Option<PrivKey>) {
+    let cert_pem = match cert.content.to_pem() {
         Ok(pem) => pem,
         Err(err) => {
             error!("Failed to convert new certificate to PEM: {:?}", err);
@@ -331,8 +330,7 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
             Ok(bytes) => bytes,
         };
 
-        // pems always read in order, so offset can be scalar.
-        let mut offset: isize = 0;
+        let mut offset = 0;
         let mut changed = false;
         for locator in pems {
             let pem = match locator.kind {
@@ -340,18 +338,14 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
                 PEMKind::PrivKey => &pkey_pem,
             };
 
-            let (target_start, target_end) = (locator.start as isize, locator.end as isize);
-            let (start, end) = (
-                0.max(target_start + offset) as usize,
-                0.max(target_end + offset) as usize,
-            );
+            let (start, end) = (locator.start + offset, locator.end + offset);
 
             if &content[start..=end] != pem {
                 changed = true;
+                content = [&content[..start], pem, &content[end..]].concat();
             }
 
-            content = [&content[..start], pem, &content[end..]].concat();
-            offset += pem.len() as isize - (target_end - target_start);
+            offset += pem.len() - (locator.start - locator.end);
         }
 
         if changed {
@@ -363,13 +357,13 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
             info!("Replacing PEMs in {path:#?}");
             if let Err(err) = fs::write(path, content) {
                 error!("Error writing: {err}");
-            };
+            }
             any_changed = true;
         }
     }
 
     if !any_changed {
-        info!("Did not change any files.")
+        info!("Did not change any files.");
     }
 }
 

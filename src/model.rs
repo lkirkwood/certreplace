@@ -45,16 +45,22 @@ impl Display for Verb {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Find { name: cn } => {
-                    write!(f, "Finding certificates and associated private keys with common name matching: {}", cn)
-            },
+                write!(f, "Finding certificates and associated private keys with common name matching: {cn}")
+            }
             Self::Replace {
                 name: cn,
                 cert: _,
                 privkey,
-            } => match privkey.is_some() {
-                true => write!(f, "Replacing certificates and associated private keys with common name matching: {}", cn),
-                false => write!(f, "Replacing certificates only with common name matching: {}", cn),
-            },
+            } => {
+                if privkey.is_some() {
+                    write!(f, "Replacing certificates and associated private keys with common name matching: {cn}")
+                } else {
+                    write!(
+                        f,
+                        "Replacing certificates only with common name matching: {cn}"
+                    )
+                }
+            }
         }
     }
 }
@@ -63,12 +69,7 @@ impl Verb {
     /// Returns the target common name.
     pub fn name(&self) -> &CommonName {
         match self {
-            Self::Find { name: cn } => cn,
-            Self::Replace {
-                name: cn,
-                cert: _,
-                privkey: _,
-            } => cn,
+            Self::Find { name } | Self::Replace { name, .. } => name,
         }
     }
 
@@ -90,7 +91,7 @@ impl Verb {
 /// An X509 certificate.
 #[derive(Debug, Clone)]
 pub struct Cert {
-    pub cert: X509,
+    pub content: X509,
     pub common_name: String,
     pub locator: PEMLocator,
 }
@@ -123,17 +124,17 @@ pub struct PEMPart<'a> {
     pub start: usize,
 }
 
-/// Kinds of PEMParts that can exist.
+/// Kinds of `PEMParts` that can exist.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PEMKind {
     Cert,
     PrivKey,
 }
 
-/// Describes the location of a PEMPart on disk.
+/// Describes the location of a `PEMPart` on disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PEMLocator {
-    /// Kind of data in this PEMPart.
+    /// Kind of data in this `PEMPart`.
     pub kind: PEMKind,
     /// Path to the file containing the bytes.
     pub path: PathBuf,
