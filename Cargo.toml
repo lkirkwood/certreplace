@@ -10,13 +10,15 @@ categories = ["command-line-utilities", "config", "filesystem", "parsing"]
 license = "GPL-3.0-or-later"
 
 [dependencies]
-clap = { version = "4.4.10", features = ["derive"] }
-openssl = { version = "0.10.68", features = ["vendored"] }
-time = { version ="0.3.17", features = ["formatting"] }
-jwalk = "0.6.0"
-regex = "1.10.2"
-paris = { version = "1.5.15", features = ["macros"] }
-anyhow = "1.0.100"
+clap = { version = "4", features = ["derive"] }
+openssl = { version = "0.10", features = ["vendored"] }
+time = { version ="0.3", features = ["formatting"] }
+jwalk = "0.8"
+regex = "1"
+paris = { version = "1", features = ["macros"] }
+anyhow = "1"
 
-[profile.release]
-strip = "debuginfo"
+[profile.dist]
+inherits = "release"
+lto = true
+codegen-units = 1
