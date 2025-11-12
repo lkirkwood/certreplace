@@ -4,24 +4,6 @@ use regex::Regex;
 use std::fmt::Display;
 use std::path::PathBuf;
 
-// Error
-
-/// Error occurring while parsing certificates or private keys.
-#[derive(Debug)]
-pub struct ParseError {
-    pub msg: String,
-}
-
-impl std::error::Error for ParseError {}
-
-impl Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Failed to parse certificate: {}", self.msg)
-    }
-}
-
-// Model
-
 #[derive(Debug)]
 pub enum CommonName {
     Literal(String),
@@ -50,10 +32,10 @@ impl CommonName {
 #[derive(Debug)]
 pub enum Verb {
     /// Find certificates and their matching private keys.
-    Find { cn: CommonName },
+    Find { name: CommonName },
     /// Replace certificates, and optionally their private keys.
     Replace {
-        cn: CommonName,
+        name: CommonName,
         cert: Cert,
         privkey: Option<PrivKey>,
     },
@@ -62,11 +44,11 @@ pub enum Verb {
 impl Display for Verb {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Find { cn } => {
+            Self::Find { name: cn } => {
                     write!(f, "Finding certificates and associated private keys with common name matching: {}", cn)
             },
             Self::Replace {
-                cn,
+                name: cn,
                 cert: _,
                 privkey,
             } => match privkey.is_some() {
@@ -79,11 +61,11 @@ impl Display for Verb {
 
 impl Verb {
     /// Returns the target common name.
-    pub fn cn(&self) -> &CommonName {
+    pub fn name(&self) -> &CommonName {
         match self {
-            Self::Find { cn } => cn,
+            Self::Find { name: cn } => cn,
             Self::Replace {
-                cn,
+                name: cn,
                 cert: _,
                 privkey: _,
             } => cn,
@@ -95,7 +77,7 @@ impl Verb {
         match self {
             Self::Find { .. } => true,
             Self::Replace {
-                cn: _,
+                name: _,
                 cert: _,
                 privkey,
             } => privkey.is_some(),

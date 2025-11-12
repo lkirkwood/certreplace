@@ -1,4 +1,5 @@
 use crate::model::*;
+use anyhow::Result;
 use jwalk::WalkDir;
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Private};
@@ -103,7 +104,7 @@ pub fn parse_cert(content: &[u8]) -> Option<X509> {
 const IGNORED_LABELS: [&str; 3] = ["TRUSTED CERTIFICATE", "X509 CRL", "PUBLIC KEY"];
 
 /// Parses X509 certs and privkeys from a PEM encoded file.
-pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
+pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>> {
     let mut pkiobjs = Vec::new();
     if let Ok(content) = fs::read(&path) {
         for part in get_pem_parts(&content)? {
@@ -135,6 +136,7 @@ pub fn parse_pkiobjs(path: PathBuf) -> Result<Vec<PKIObject>, ParseError> {
             }
         }
     };
+
     Ok(pkiobjs)
 }
 
@@ -148,7 +150,7 @@ const PEM_END: [char; 5] = ['-', 'E', 'N', 'D', ' '];
 const LABEL_TRIM: [char; 2] = ['-', ' '];
 
 /// Parses the data into PEM parts.
-pub fn get_pem_parts(data: &[u8]) -> Result<Vec<PEMPart<'_>>, ParseError> {
+pub fn get_pem_parts(data: &[u8]) -> Result<Vec<PEMPart<'_>>> {
     let mut parts = Vec::new();
 
     let mut in_boundary = false;

@@ -1,6 +1,7 @@
 mod model;
 mod parse;
 
+use anyhow::{bail, Result};
 use model::*;
 use parse::*;
 use regex::Regex;
@@ -22,7 +23,8 @@ use time::{
 };
 
 /// The help text to error for the regex parameter.
-const REGEX_HELP: &str = "Rust regex pattern that subject name (common name or an alternative name) must match in x509 certificates.";
+const REGEX_HELP: &str = "Rust regex pattern that subject name \
+                          (common name or an alternative name) must match in x509 certificates.";
 
 /// The help text to display for the common name parameter.
 const COMMON_NAME_HELP: &str =
@@ -61,7 +63,6 @@ pub struct Cli {
     pub force: bool,
 }
 
-/// Main loop of the app.
 fn main() {
     let args = Cli::parse();
 
@@ -70,7 +71,7 @@ fn main() {
         exit(1);
     }
 
-    let cn = match args.name {
+    let common_name = match args.name {
         None => match args.regex {
             None => None,
             Some(pattern) => match Regex::new(&pattern) {
@@ -81,12 +82,12 @@ fn main() {
                 }
             },
         },
-        Some(cn) => Some(CommonName::Literal(cn)),
+        Some(common_name) => Some(CommonName::Literal(common_name)),
     };
 
     let verb = match &args.certificate {
         Some(cert_path) => {
-            let cert = match choose_cert(cert_path, cn.as_ref()) {
+            let cert = match choose_cert(cert_path, common_name.as_ref()) {
                 Ok(cert) => cert,
                 Err(err) => {
                     error!("{err}");
@@ -100,13 +101,13 @@ fn main() {
                 .map(|privkey_path| choose_privkey(privkey_path, &cert).unwrap());
 
             Verb::Replace {
-                cn: CommonName::Literal(cert.common_name.clone()),
+                name: CommonName::Literal(cert.common_name.clone()),
                 cert,
                 privkey,
             }
         }
-        None => match cn {
-            Some(cn) => Verb::Find { cn },
+        None => match common_name {
+            Some(common_name) => Verb::Find { name: common_name },
             None => {
                 error!("Must provide one of name, regex, or certificate to use for search.");
                 exit(1);
@@ -115,11 +116,11 @@ fn main() {
     };
 
     if args.force || confirm_action(&verb) {
-        let paths = find_certs(PathBuf::from(args.path), verb.cn(), verb.privkeys());
+        let paths = find_certs(PathBuf::from(args.path), verb.name(), verb.privkeys());
         match verb {
             Verb::Find { .. } => print_pems(paths),
             Verb::Replace {
-                cn: _,
+                name: _,
                 cert,
                 privkey,
             } => replace_pems(paths, cert, privkey),
@@ -127,40 +128,42 @@ fn main() {
     } else {
         error!(
             "User declined to replace objects for common name: {}",
-            verb.cn()
+            verb.name()
         );
         exit(1);
     }
 }
 
-/// Chooses a certificate matching a common name from a file of pki objs,
+/// Chooses a certificate matching a common name from an input file of pki objs,
 /// or returns an error if there is no unique match.
-fn choose_cert(path: &str, cn: Option<&CommonName>) -> Result<Cert, ParseError> {
+fn choose_cert(path: &str, name: Option<&CommonName>) -> Result<Cert> {
     let path = PathBuf::from(path);
     let pkis = parse_pkiobjs(path).unwrap();
 
-    if cn.is_none() {
+    if name.is_none() {
         let mut certs = Vec::new();
         for pki in pkis {
             if let PKIObject::Cert(cert) = pki {
                 certs.push(cert);
             }
         }
+
         if certs.len() == 1 {
             Ok(certs.pop().unwrap())
         } else {
-            Err(ParseError {
-                msg: "Replacement file does not contain exactly one certificate, so a common name must be provided.".to_string()
-            })
+            bail!(
+                "Replacement file does not contain exactly one certificate, \
+                so a common name must be provided."
+            )
         }
     } else {
-        let cn = cn.unwrap();
+        let name = name.unwrap();
 
         let mut certs = Vec::new();
         for pki in pkis {
             match pki {
                 PKIObject::Cert(cert) => {
-                    if cn.matches(&cert.common_name) {
+                    if name.matches(&cert.common_name) {
                         certs.push(cert);
                     }
                 }
@@ -170,16 +173,17 @@ fn choose_cert(path: &str, cn: Option<&CommonName>) -> Result<Cert, ParseError> 
         if certs.len() == 1 {
             Ok(certs.pop().unwrap())
         } else {
-            Err(ParseError {
-                msg: format!("Replacement file does not contain exactly one certificate with common name matching \"{cn}\"")
-            })
+            bail!(
+                "Replacement file does not contain exactly one certificate \
+                with common name matching \"{name}\""
+            )
         }
     }
 }
 
 /// Chooses a private key matching a cert from a file of pki objs,
 /// or returns an error if there is no unique match.
-fn choose_privkey(path: &str, cert: &Cert) -> Result<PrivKey, ParseError> {
+fn choose_privkey(path: &str, cert: &Cert) -> Result<PrivKey> {
     if let Ok(pubkey) = cert.cert.public_key() {
         let path = PathBuf::from(path);
         let pkis = parse_pkiobjs(path).unwrap();
@@ -198,20 +202,16 @@ fn choose_privkey(path: &str, cert: &Cert) -> Result<PrivKey, ParseError> {
         if privkeys.len() == 1 {
             Ok(privkeys.pop().unwrap())
         } else {
-            Err(ParseError {
-                msg: format!(
+            bail!(
                 "Provided file does not contain exactly one private key match cert with common name: {}",
                 cert.common_name
-            ),
-            })
+            )
         }
     } else {
-        Err(ParseError {
-            msg: format!(
-                "Failed to get public key from provided certificate with common name matching \"{}\"",
-                cert.common_name
-            ),
-        })
+        bail!(
+            "Failed to get public key from provided certificate with common name matching \"{}\"",
+            cert.common_name
+        )
     }
 }
 
@@ -223,7 +223,7 @@ fn confirm_action(verb: &Verb) -> bool {
             true
         }
         Verb::Replace {
-            cn: _,
+            name: _,
             cert,
             privkey,
         } => {
@@ -374,7 +374,7 @@ fn replace_pems(targets: Vec<PEMLocator>, cert: Cert, privkey: Option<PrivKey>) 
 }
 
 /// Creates a backup of a file with the provided datetime and ".bkp" appended to the filename.
-fn backup_file(path: &PathBuf, datetime: &str) -> Result<(), io::Error> {
+fn backup_file(path: &PathBuf, datetime: &str) -> Result<()> {
     let ext = match path.extension() {
         None => String::new(),
         Some(os_str) => os_str.to_string_lossy().to_string(),
