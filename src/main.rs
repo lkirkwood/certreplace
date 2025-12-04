@@ -169,7 +169,8 @@ fn print_pems(pems: &[PEMLocator]) {
     info!("Matching certificates:");
     for cert in pems {
         if cert.kind == PEMKind::Cert {
-            println!("\t{}", cert.path.display());
+            eprint!("\t");
+            println!("{}", cert.path.display());
         }
     }
 
@@ -177,7 +178,8 @@ fn print_pems(pems: &[PEMLocator]) {
     info!("Matching private keys:");
     for key in pems {
         if key.kind == PEMKind::PrivKey {
-            println!("\t{}", key.path.display());
+            eprint!("\t");
+            println!("{}", key.path.display());
         }
     }
 }
