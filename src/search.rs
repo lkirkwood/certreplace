@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 use jwalk::WalkDir;
-use paris::error;
 
 use crate::{
     model::{Cert, CommonName, PEMLocator, PKIObject, PrivKey},
@@ -100,7 +99,7 @@ pub fn find_certs(path: &PathBuf, cn: &CommonName, privkeys: bool) -> Vec<PEMLoc
     let mut keys = Vec::new();
     for path in find_pkiobj_files(path) {
         match parse_pkiobjs(&path) {
-            Err(err) => error!("{:?}", err),
+            Err(err) => eprintln!("{:?}", err),
             Ok(pkiobjs) => {
                 for pkiobj in pkiobjs {
                     match pkiobj {
@@ -126,7 +125,7 @@ pub fn find_certs(path: &PathBuf, cn: &CommonName, privkeys: bool) -> Vec<PEMLoc
                             .map(|pubkey| pubkey.locator),
                     );
                 } else {
-                    error!("Failed to read public key from X509: {cert:?}");
+                    eprintln!("Failed to read public key from X509: {cert:?}");
                 }
             }
             pems.push(cert.locator);

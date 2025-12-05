@@ -11,7 +11,6 @@ use regex::Regex;
 use search::find_certs;
 
 use clap::Parser;
-use paris::{error, info};
 use std::path::PathBuf;
 use std::process::exit;
 use std::{
@@ -64,7 +63,7 @@ fn main() {
     let args = Cli::parse();
 
     if args.regex.is_some() & args.name.is_some() {
-        error!("Please only use one of regex (-e) and common name (-n) parameters.");
+        eprintln!("Please only use one of regex (-e) and common name (-n) parameters.");
         exit(1);
     }
 
@@ -74,7 +73,7 @@ fn main() {
             Some(pattern) => match Regex::new(&pattern) {
                 Ok(pattern) => Some(CommonName::Pattern(pattern)),
                 Err(err) => {
-                    error!("Invalid regular expression {pattern}: {err}");
+                    eprintln!("Invalid regular expression {pattern}: {err}");
                     exit(1);
                 }
             },
@@ -87,7 +86,7 @@ fn main() {
             let cert = match choose_cert(cert_path, common_name.as_ref()) {
                 Ok(cert) => cert,
                 Err(err) => {
-                    error!("{err}");
+                    eprintln!("{err}");
                     exit(1);
                 }
             };
@@ -107,7 +106,7 @@ fn main() {
             if let Some(common_name) = common_name {
                 Verb::Find { name: common_name }
             } else {
-                error!("Must provide one of name, regex, or certificate to use for search.");
+                eprintln!("Must provide one of name, regex, or certificate to use for search.");
                 exit(1);
             }
         }
@@ -119,13 +118,13 @@ fn main() {
             Verb::Find { .. } => print_pems(&paths),
             Verb::Replace { cert, privkey, .. } => {
                 if let Err(err) = replace_pems(paths, &cert, privkey) {
-                    error!("{err}");
+                    eprintln!("{err}");
                     exit(1);
                 }
             }
         }
     } else {
-        error!(
+        eprintln!(
             "User declined to replace objects for common name: {}",
             verb.name()
         );
@@ -137,7 +136,7 @@ fn main() {
 fn confirm_action(verb: &Verb) -> bool {
     match verb {
         Verb::Find { .. } => {
-            info!("{verb}");
+            eprintln!("{verb}");
             true
         }
         Verb::Replace {
@@ -145,15 +144,15 @@ fn confirm_action(verb: &Verb) -> bool {
             cert,
             privkey,
         } => {
-            info!("{verb}");
-            info!("Replacement certificate: {:?}", cert.locator.path);
+            eprintln!("{verb}");
+            eprintln!("Replacement certificate: {:?}", cert.locator.path);
             if let Some(privkey) = privkey {
-                info!("Replacement private key: {:?}", privkey.locator.path);
+                eprintln!("Replacement private key: {:?}", privkey.locator.path);
             }
-            print!("Okay? (y/n) ");
-            io::stdout()
+            eprint!("Okay? (y/n) ");
+            io::stderr()
                 .flush()
-                .expect("Failed to flush stdout when printing confirmation message.");
+                .expect("Failed to flush stderr when printing confirmation message.");
             let mut input = String::new();
             io::stdin()
                 .read_line(&mut input)
@@ -165,8 +164,8 @@ fn confirm_action(verb: &Verb) -> bool {
 
 /// Prints the locations of pems.
 fn print_pems(pems: &[PEMLocator]) {
-    println!();
-    info!("Matching certificates:");
+    eprintln!();
+    eprintln!("Matching certificates:");
     for cert in pems {
         if cert.kind == PEMKind::Cert {
             eprint!("\t");
@@ -174,8 +173,8 @@ fn print_pems(pems: &[PEMLocator]) {
         }
     }
 
-    println!();
-    info!("Matching private keys:");
+    eprintln!();
+    eprintln!("Matching private keys:");
     for key in pems {
         if key.kind == PEMKind::PrivKey {
             eprint!("\t");

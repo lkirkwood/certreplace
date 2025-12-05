@@ -15,7 +15,6 @@ openssl = { version = "0.10", features = ["vendored"] }
 time = { version ="0.3", features = ["formatting"] }
 jwalk = "0.8"
 regex = "1"
-paris = { version = "1", features = ["macros"] }
 anyhow = "1"
 
 [profile.dist]

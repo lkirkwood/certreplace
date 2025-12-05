@@ -91,7 +91,6 @@ dependencies = [
  "clap",
  "jwalk",
  "openssl",
- "paris",
  "regex",
  "time",
 ]
@@ -345,12 +344,6 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
-
-[[package]]
-name = "paris"
-version = "1.5.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fecab3723493c7851f292cb060f3ee1c42f19b8d749345d0d7eaf3fd19aa62d"
 
 [[package]]
 name = "pkg-config"

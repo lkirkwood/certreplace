@@ -1,6 +1,5 @@
 use crate::model::{Cert, PEMKind, PEMLocator, PrivKey, Replacement};
 use anyhow::{Context, Result};
-use paris::{error, info, warn};
 use std::{collections::HashMap, fs, path::PathBuf};
 use time::{
     format_description::well_known::{
@@ -82,8 +81,8 @@ pub fn replace_pems(
             let backup = match backup_file(&path, &now) {
                 Ok(bkp_path) => bkp_path,
                 Err(err) => {
-                    error!("Failed to backup file at {}: {err}", path.display());
-                    warn!(
+                    eprintln!("Failed to backup file at {}: {err}", path.display());
+                    eprintln!(
                         "Not touching file at {} due to backup error.",
                         path.display()
                     );
@@ -91,9 +90,9 @@ pub fn replace_pems(
                 }
             };
 
-            info!("Replacing PEMs in {}", path.display());
+            eprintln!("Replacing PEMs in {}", path.display());
             if let Err(err) = fs::write(&path, content) {
-                error!("Error writing: {err}");
+                eprintln!("Error writing: {err}");
                 continue;
             }
 
@@ -105,7 +104,7 @@ pub fn replace_pems(
     }
 
     if replacements.is_empty() {
-        info!("Did not change any files.");
+        eprintln!("Did not change any files.");
     }
 
     Ok(replacements)
