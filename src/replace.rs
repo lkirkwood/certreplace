@@ -159,13 +159,12 @@ mod tests {
         fs::remove_file(&backup).unwrap();
     }
 
-    #[test]
-    fn test_replace_certs() {
-        let incert_path = "./test/mock-certs/leaf-replace.pem";
-        let incert = choose_cert(incert_path, None).unwrap();
+    fn test_replace_certs(folder: &str) {
+        let incert_path = format!("{folder}/leaf-replace.pem");
+        let incert = choose_cert(&incert_path, None).unwrap();
 
         let paths = find_certs(
-            &PathBuf::from_str("./test/mock-certs").unwrap(),
+            &PathBuf::from_str(folder).unwrap(),
             &CommonName::Literal(incert.common_name.clone()),
             false,
         )
@@ -181,8 +180,8 @@ mod tests {
             .collect();
         modified.sort();
 
-        let old_leaf = PathBuf::from_str("./test/mock-certs/leaf.pem").unwrap();
-        let old_fullchain = PathBuf::from_str("./test/mock-certs/full-chain.pem").unwrap();
+        let old_leaf = PathBuf::from_str(&format!("{folder}/leaf.pem")).unwrap();
+        let old_fullchain = PathBuf::from_str(&format!("{folder}/full-chain.pem")).unwrap();
         assert_eq!(
             modified,
             Vec::from([old_fullchain.clone(), old_leaf.clone()])
@@ -193,7 +192,7 @@ mod tests {
 
         let new_fullchain_content = fs::read(&old_fullchain).unwrap();
         assert_eq!(
-            fs::read("./test/mock-certs/full-chain-replaced.pem").unwrap(),
+            fs::read(format!("{folder}/full-chain-replaced.pem")).unwrap(),
             new_fullchain_content
         );
 
@@ -202,5 +201,15 @@ mod tests {
             fs::write(&replacement.modified, backup_content).unwrap();
             fs::remove_file(&replacement.backup).unwrap();
         }
+    }
+
+    #[test]
+    fn test_replace_certs_1() {
+        test_replace_certs("./test/mock-certs-1");
+    }
+
+    #[test]
+    fn test_replace_certs_2() {
+        test_replace_certs("./test/mock-certs-2");
     }
 }
